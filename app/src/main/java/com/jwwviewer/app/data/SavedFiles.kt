@@ -16,7 +16,8 @@ import java.io.FileOutputStream
  */
 object SavedFiles {
     const val FOLDER_NAME = "JwwViewer"
-    private const val RELATIVE_DOCS = "${Environment.DIRECTORY_DOCUMENTS}/$FOLDER_NAME"
+    private val relativeDocs: String
+        get() = "${Environment.DIRECTORY_DOCUMENTS}/$FOLDER_NAME"
 
     fun libraryDir(context: Context): File {
         // Prefer public Documents/JwwViewer when writable (API 28 and below, or OEMs that allow it)
@@ -86,7 +87,7 @@ object SavedFiles {
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
                 put(MediaStore.MediaColumns.MIME_TYPE, mime)
-                put(MediaStore.MediaColumns.RELATIVE_PATH, RELATIVE_DOCS)
+                put(MediaStore.MediaColumns.RELATIVE_PATH, relativeDocs)
                 if (Build.VERSION.SDK_INT >= 29) {
                     put(MediaStore.MediaColumns.IS_PENDING, 1)
                 }
