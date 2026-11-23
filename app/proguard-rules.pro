@@ -1,0 +1,1 @@
+# JwwViewer — keep default rules
