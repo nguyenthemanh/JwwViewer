@@ -14,9 +14,9 @@
     <string name="settings_language">Ngôn ngữ</string>
     <string name="lang_system">Theo hệ thống</string>
     <string name="lang_vi">Tiếng Việt</string>
-    <string name="lang_en">Tiếng Anh</string>
-    <string name="lang_ja">Tiếng Nhật</string>
-    <string name="lang_zh">Tiếng Trung</string>
+    <string name="lang_en">English</string>
+    <string name="lang_ja">日本語</string>
+    <string name="lang_zh">中文</string>
     <string name="settings_performance">Hiệu năng</string>
     <string name="perf_low">Tiết kiệm</string>
     <string name="perf_low_desc">Máy yếu / pin — bỏ chữ CAD, PDF độ phân giải thấp</string>
@@ -76,4 +76,21 @@
     <string name="save_on_exit_discard">Không lưu</string>
     <string name="save_on_exit_saving">Đang lưu…</string>
     <string name="save_on_exit_failed">Không lưu được file</string>
+    <string name="section_about">Thông tin</string>
+    <string name="about_version">Phiên bản %1$s</string>
+    <string name="section_author">Tác giả</string>
+    <string name="author_role">JwwViewer · xem JWW / PDF</string>
+    <string name="author_tap_hint">Nhấn tên để mở Facebook</string>
+    <string name="btn_author_facebook">Facebook · nnguyenthemanh</string>
+    <string name="github_repo_label">GitHub: %1$s</string>
+    <string name="btn_check_update">Kiểm tra cập nhật</string>
+    <string name="btn_open_github">Mở GitHub</string>
+    <string name="update_checking">Đang kiểm tra…</string>
+    <string name="update_latest">Đã là bản mới nhất (%1$s)</string>
+    <string name="update_found">Có bản mới %1$s — đang tải…</string>
+    <string name="update_downloading">Đang tải %1$d%%…</string>
+    <string name="update_installing">Đã tải xong — mở trình cài đặt…</string>
+    <string name="update_no_apk">Có bản mới %1$s nhưng không thấy file APK</string>
+    <string name="update_fail">Không cập nhật được: %1$s</string>
+    <string name="update_need_install_perm">Cho phép cài app từ nguồn này rồi nhấn lại</string>
 </resources>

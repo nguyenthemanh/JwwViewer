@@ -13,10 +13,10 @@
     <string name="settings">設定</string>
     <string name="settings_language">言語</string>
     <string name="lang_system">システムに従う</string>
-    <string name="lang_vi">ベトナム語</string>
-    <string name="lang_en">英語</string>
+    <string name="lang_vi">Tiếng Việt</string>
+    <string name="lang_en">English</string>
     <string name="lang_ja">日本語</string>
-    <string name="lang_zh">中国語</string>
+    <string name="lang_zh">中文</string>
     <string name="settings_performance">パフォーマンス</string>
     <string name="perf_low">省電力</string>
     <string name="perf_low_desc">低スペック向け — 文字省略・低解像度PDF</string>
@@ -76,4 +76,21 @@
     <string name="save_on_exit_discard">保存しない</string>
     <string name="save_on_exit_saving">保存中…</string>
     <string name="save_on_exit_failed">保存できませんでした</string>
+    <string name="section_about">情報</string>
+    <string name="about_version">バージョン %1$s</string>
+    <string name="section_author">作者</string>
+    <string name="author_role">JwwViewer · JWW / PDF ビューア</string>
+    <string name="author_tap_hint">名前をタップして Facebook を開く</string>
+    <string name="btn_author_facebook">Facebook · nnguyenthemanh</string>
+    <string name="github_repo_label">GitHub: %1$s</string>
+    <string name="btn_check_update">更新を確認</string>
+    <string name="btn_open_github">GitHub を開く</string>
+    <string name="update_checking">確認中…</string>
+    <string name="update_latest">最新版です（%1$s）</string>
+    <string name="update_found">新しいバージョン %1$s — ダウンロード中…</string>
+    <string name="update_downloading">ダウンロード中 %1$d%%…</string>
+    <string name="update_installing">ダウンロード完了 — インストーラーを開きます…</string>
+    <string name="update_no_apk">新しいバージョン %1$s がありますが APK がありません</string>
+    <string name="update_fail">更新に失敗しました: %1$s</string>
+    <string name="update_need_install_perm">このソースからのインストールを許可してから再試行してください</string>
 </resources>
