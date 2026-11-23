@@ -28,10 +28,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Architecture
 import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.DesktopWindows
+import androidx.compose.material.icons.rounded.DevicesFold
 import androidx.compose.material.icons.rounded.FileOpen
+import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.TabletMac
+import androidx.compose.material.icons.rounded.TabletAndroid
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -39,18 +42,21 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.jwwviewer.app.R
 import com.jwwviewer.app.data.RecentFile
 import com.jwwviewer.app.ui.adaptive.AdaptiveLayout
+import com.jwwviewer.app.ui.adaptive.FoldInfo
 
 @Composable
 fun HomeScreen(
@@ -102,6 +108,7 @@ fun HomeScreen(
                 )
                 VerticalDivider()
                 WideHintPane(
+                    adaptive = adaptive,
                     modifier = Modifier
                         .weight(adaptive.paneDetailWeight)
                         .fillMaxHeight()
@@ -248,7 +255,10 @@ private fun HomePane(
 }
 
 @Composable
-private fun WideHintPane(modifier: Modifier = Modifier) {
+private fun WideHintPane(
+    adaptive: AdaptiveLayout,
+    modifier: Modifier = Modifier,
+) {
     val scheme = MaterialTheme.colorScheme
     Column(
         modifier = modifier,
@@ -256,7 +266,7 @@ private fun WideHintPane(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
-            Icons.Rounded.TabletMac,
+            imageVector = deviceHintIcon(adaptive),
             contentDescription = null,
             tint = scheme.primary,
             modifier = Modifier.size(72.dp),
@@ -272,6 +282,24 @@ private fun WideHintPane(modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.bodyLarge,
             color = scheme.onSurfaceVariant,
         )
+    }
+}
+
+/** Icon khớp thiết bị / tư thế đang dùng (Fold, tablet, phone, desktop). */
+private fun deviceHintIcon(adaptive: AdaptiveLayout): ImageVector {
+    val fold: FoldInfo? = adaptive.fold
+    return when {
+        fold != null && (
+            fold.isSeparating ||
+                fold.isBookPosture ||
+                fold.isTabletopPosture
+            ) -> Icons.Rounded.DevicesFold
+        fold != null -> Icons.Rounded.DevicesFold
+        adaptive.widthClass == WindowWidthSizeClass.Expanded &&
+            adaptive.heightClass == WindowHeightSizeClass.Compact -> Icons.Rounded.DesktopWindows
+        adaptive.widthClass == WindowWidthSizeClass.Expanded ||
+            adaptive.widthClass == WindowWidthSizeClass.Medium -> Icons.Rounded.TabletAndroid
+        else -> Icons.Rounded.PhoneAndroid
     }
 }
 
