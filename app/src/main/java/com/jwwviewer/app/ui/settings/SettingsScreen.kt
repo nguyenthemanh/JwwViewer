@@ -28,7 +28,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -283,12 +282,7 @@ private fun AboutBlock() {
     Text(
         text = stringResource(R.string.about_version, BuildConfig.VERSION_NAME),
         style = MaterialTheme.typography.bodyLarge,
-    )
-    Text(
-        text = stringResource(R.string.github_repo_label, BuildConfig.GITHUB_REPO),
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
+        modifier = Modifier.padding(bottom = 12.dp),
     )
 
     Text(stringResource(R.string.section_author), style = MaterialTheme.typography.titleMedium)
@@ -314,74 +308,54 @@ private fun AboutBlock() {
     )
 
     Spacer(modifier = Modifier.height(8.dp))
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Button(
-            onClick = {
-                if (busy) return@Button
-                busy = true
-                status = checking
-                scope.launch {
-                    try {
-                        val result = withContext(Dispatchers.IO) {
-                            UpdateChecker.check(BuildConfig.VERSION_NAME)
-                        }
-                        if (!result.newer) {
-                            status = latestFmt.format(result.tagName)
-                            busy = false
-                            return@launch
-                        }
-                        val apkUrl = result.apkUrl
-                        if (apkUrl.isNullOrBlank()) {
-                            status = noApkFmt.format(result.tagName)
-                            busy = false
-                            return@launch
-                        }
-                        status = foundFmt.format(result.tagName)
-                        val file = withContext(Dispatchers.IO) {
-                            UpdateChecker.downloadApk(context, apkUrl) { pct ->
-                                scope.launch(Dispatchers.Main.immediate) {
-                                    status = downloadingFmt.format(pct)
-                                }
+    Button(
+        onClick = {
+            if (busy) return@Button
+            busy = true
+            status = checking
+            scope.launch {
+                try {
+                    val result = withContext(Dispatchers.IO) {
+                        UpdateChecker.check(BuildConfig.VERSION_NAME)
+                    }
+                    if (!result.newer) {
+                        status = latestFmt.format(result.tagName)
+                        busy = false
+                        return@launch
+                    }
+                    val apkUrl = result.apkUrl
+                    if (apkUrl.isNullOrBlank()) {
+                        status = noApkFmt.format(result.tagName)
+                        busy = false
+                        return@launch
+                    }
+                    status = foundFmt.format(result.tagName)
+                    val file = withContext(Dispatchers.IO) {
+                        UpdateChecker.downloadApk(context, apkUrl) { pct ->
+                            scope.launch(Dispatchers.Main.immediate) {
+                                status = downloadingFmt.format(pct)
                             }
                         }
-                        status = installing
-                        installApk(
-                            context = context,
-                            file = file,
-                            needPermMessage = needPerm,
-                        )
-                    } catch (e: Exception) {
-                        val msg = failFmt.format(e.message ?: e.javaClass.simpleName)
-                        status = msg
-                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                    } finally {
-                        busy = false
                     }
-                }
-            },
-            enabled = !busy,
-            modifier = Modifier.weight(1f),
-        ) {
-            Text(stringResource(R.string.btn_check_update))
-        }
-        OutlinedButton(
-            onClick = {
-                runCatching {
-                    context.startActivity(
-                        Intent(
-                            Intent.ACTION_VIEW,
-                            Uri.parse("https://github.com/${BuildConfig.GITHUB_REPO}"),
-                        ),
+                    status = installing
+                    installApk(
+                        context = context,
+                        file = file,
+                        needPermMessage = needPerm,
                     )
+                } catch (e: Exception) {
+                    val msg = failFmt.format(e.message ?: e.javaClass.simpleName)
+                    status = msg
+                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                } finally {
+                    busy = false
                 }
-            },
-            modifier = Modifier.weight(1f),
-        ) {
-            Text(stringResource(R.string.btn_open_github))
-        }
+            }
+        },
+        enabled = !busy,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(stringResource(R.string.btn_check_update))
     }
     status?.let {
         Text(
