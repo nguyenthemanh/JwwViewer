@@ -1,64 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One UI–style glyph: blueprint sheet + drafting compass (CAD / JWW viewer) -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-
-    <!-- Soft sheet (safe zone ~center) -->
     <path
-        android:fillColor="#F0FDFA"
-        android:pathData="M34,30 h40 a4,4 0 0 1 4,4 v40 a4,4 0 0 1 -4,4 h-40 a4,4 0 0 1 -4,-4 v-40 a4,4 0 0 1 4,-4 z" />
-
-    <!-- Blueprint grid -->
+        android:fillColor="#CCFBF1"
+        android:pathData="M28,72 L28,36 L54,24 L80,36 L80,72 L54,84 Z"
+        android:strokeWidth="3"
+        android:strokeColor="#134E4A" />
     <path
         android:fillColor="#00000000"
-        android:pathData="M38,42 h32 M38,50 h32 M38,58 h32 M38,66 h32 M46,34 v44 M54,34 v44 M62,34 v44"
-        android:strokeWidth="1.2"
-        android:strokeColor="#99F6E4" />
-
-    <!-- Floor plan walls -->
+        android:pathData="M28,36 L54,48 L80,36 M54,48 L54,84"
+        android:strokeWidth="3"
+        android:strokeColor="#134E4A" />
     <path
         android:fillColor="#00000000"
-        android:pathData="M40,44 h20 v16 h-8 v8 h-12 z"
-        android:strokeWidth="2.4"
-        android:strokeColor="#115E59"
-        android:strokeLineJoin="round"
-        android:strokeLineCap="round" />
-
-    <!-- Inner room -->
-    <path
-        android:fillColor="#00000000"
-        android:pathData="M44,48 h10 v8 h-10 z"
-        android:strokeWidth="1.8"
+        android:pathData="M40,58 L68,58 M40,66 L60,66"
+        android:strokeWidth="2.5"
         android:strokeColor="#0F766E" />
-
-    <!-- Dimension line -->
-    <path
-        android:fillColor="#00000000"
-        android:pathData="M40,72 h20 M40,70 v4 M60,70 v4"
-        android:strokeWidth="1.6"
-        android:strokeColor="#134E4A"
-        android:strokeLineCap="round" />
-
-    <!-- Compass / caliper (app purpose cue) -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M68,38 m-5,0 a5,5 0 1,1 10,0 a5,5 0 1,1 -10,0" />
-    <path
-        android:fillColor="#134E4A"
-        android:pathData="M68,38 m-3.2,0 a3.2,3.2 0 1,1 6.4,0 a3.2,3.2 0 1,1 -6.4,0" />
-    <path
-        android:fillColor="#00000000"
-        android:pathData="M66.2,41.5 L58,68 M69.8,41.5 L78,66"
-        android:strokeWidth="2.6"
-        android:strokeColor="#134E4A"
-        android:strokeLineCap="round" />
-    <path
-        android:fillColor="#CCFBF1"
-        android:pathData="M58,68 m-2.2,0 a2.2,2.2 0 1,1 4.4,0 a2.2,2.2 0 1,1 -4.4,0" />
-    <path
-        android:fillColor="#CCFBF1"
-        android:pathData="M78,66 m-2.2,0 a2.2,2.2 0 1,1 4.4,0 a2.2,2.2 0 1,1 -4.4,0" />
 </vector>
