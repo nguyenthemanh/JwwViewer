@@ -8,6 +8,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,8 +16,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.NavigateBefore
@@ -105,66 +108,82 @@ fun PdfViewerScreen(
             tonalElevation = 2.dp,
             shadowElevation = 1.dp,
         ) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
                     .padding(start = 2.dp, end = 4.dp, top = 2.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
-                ViewerToolButton(
-                    icon = Icons.AutoMirrored.Rounded.ArrowBack,
-                    label = stringResource(R.string.tool_back),
-                    onClick = onBack,
-                )
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 4.dp),
-                )
-                if (pageCount > 0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ViewerToolButton(
+                        icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                        label = stringResource(R.string.tool_back),
+                        onClick = onBack,
+                        compact = true,
+                    )
                     Text(
-                        text = stringResource(
-                            R.string.tool_page,
-                            pagerState.currentPage + 1,
-                            pageCount,
-                        ),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(end = 4.dp),
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f)
+                            .widthIn(min = 0.dp)
+                            .padding(horizontal = 4.dp),
                     )
                 }
-                ViewerToolButton(
-                    icon = Icons.AutoMirrored.Rounded.NavigateBefore,
-                    label = stringResource(R.string.tool_prev),
-                    onClick = {
-                        if (canPrev) {
-                            scope.launch {
-                                pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (pageCount > 0) {
+                        Text(
+                            text = stringResource(
+                                R.string.tool_page,
+                                pagerState.currentPage + 1,
+                                pageCount,
+                            ),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        )
+                    }
+                    ViewerToolButton(
+                        icon = Icons.AutoMirrored.Rounded.NavigateBefore,
+                        label = stringResource(R.string.tool_prev),
+                        compact = true,
+                        onClick = {
+                            if (canPrev) {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                }
                             }
-                        }
-                    },
-                )
-                ViewerToolButton(
-                    icon = Icons.AutoMirrored.Rounded.NavigateNext,
-                    label = stringResource(R.string.tool_next),
-                    onClick = {
-                        if (canNext) {
-                            scope.launch {
-                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                        },
+                    )
+                    ViewerToolButton(
+                        icon = Icons.AutoMirrored.Rounded.NavigateNext,
+                        label = stringResource(R.string.tool_next),
+                        compact = true,
+                        onClick = {
+                            if (canNext) {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                }
                             }
-                        }
-                    },
-                )
-                ViewerToolButton(
-                    icon = Icons.Rounded.ZoomOutMap,
-                    label = stringResource(R.string.tool_fit),
-                    onClick = { fitNonce++ },
-                )
+                        },
+                    )
+                    ViewerToolButton(
+                        icon = Icons.Rounded.ZoomOutMap,
+                        label = stringResource(R.string.tool_fit),
+                        compact = true,
+                        onClick = { fitNonce++ },
+                    )
+                }
             }
         }
 

@@ -71,7 +71,7 @@
     <string name="memo_delete">削除</string>
     <string name="memo_untitled">（空）</string>
     <string name="save_on_exit_title">アプリに保存しますか？</string>
-    <string name="save_on_exit_message">「%1$s」は他のアプリまたはリンクから開かれました。JwwViewerにコピーを保存して「最近」から再開しますか？</string>
+    <string name="save_on_exit_message">「%1$s」は他のアプリまたはリンクから開かれました。Documents/JwwViewer にコピーを保存して「最近」から再開しますか？</string>
     <string name="save_on_exit_save">保存</string>
     <string name="save_on_exit_discard">保存しない</string>
     <string name="save_on_exit_saving">保存中…</string>
@@ -93,10 +93,10 @@
     <string name="update_no_apk">新しいバージョン %1$s がありますが APK がありません</string>
     <string name="update_fail">更新に失敗しました: %1$s</string>
     <string name="update_need_install_perm">このソースからのインストールを許可してから再試行してください</string>
-    <string name="measure_pick_b">計測: 点Bをタップ</string>
+    <string name="measure_pick_b">計測: 2点目をタップ (B)</string>
     <string name="measure_reset">リセット</string>
     <string name="author_name">Nguyen The Manh</string>
-    <string name="measure_result">%1$s  ·  尺度 1:%2$s</string>
+    <string name="measure_result">%1$s · 尺度 1:%2$s</string>
     <string name="tool_measure">計測</string>
-    <string name="measure_pick_a">計測: 点Aをタップ</string>
+    <string name="measure_pick_a">計測: 図面の点/線の近くをタップ (A)</string>
 </resources>

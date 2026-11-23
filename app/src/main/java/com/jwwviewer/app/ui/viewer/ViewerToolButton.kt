@@ -26,24 +26,30 @@ fun ViewerToolButton(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
+    val minW = if (compact) 40.dp else 44.dp
+    val iconSize = if (compact) 20.dp else 22.dp
+    val hPad = if (compact) 4.dp else 5.dp
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
-            .widthIn(min = 48.dp)
+            .widthIn(min = minW, max = if (compact) 56.dp else 72.dp)
             .clip(RoundedCornerShape(10.dp))
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 6.dp, vertical = 4.dp),
+            .padding(horizontal = hPad, vertical = 4.dp),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
-            modifier = Modifier.size(22.dp),
+            modifier = Modifier.size(iconSize),
             tint = MaterialTheme.colorScheme.primary,
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp),
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontSize = if (compact) 9.sp else 10.sp,
+            ),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

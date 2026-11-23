@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <files-path name="saved" path="saved/" />
+    <external-files-path name="ext_docs" path="Documents/JwwViewer/" />
+    <external-files-path name="ext_root" path="JwwViewer/" />
+    <external-path name="public_docs" path="Documents/JwwViewer/" />
     <cache-path name="updates" path="updates/" />
 </paths>

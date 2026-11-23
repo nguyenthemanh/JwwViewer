@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -67,19 +69,21 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.jwwviewer.app.R
-import kotlin.math.hypot
-import kotlin.math.roundToInt
 import com.jwwviewer.app.data.AppLanguage
 import com.jwwviewer.app.data.AppSettings
 import com.jwwviewer.app.data.DrawingMemo
 import com.jwwviewer.app.data.TranslateEngine
 import com.jwwviewer.app.parser.JwwDrawing
 import com.jwwviewer.app.render.CadRenderer
+import com.jwwviewer.app.render.CadSnap
 import com.jwwviewer.app.render.CadTextHit
 import com.jwwviewer.app.render.CadTextHitTester
 import com.jwwviewer.app.render.JwwColors
 import com.jwwviewer.app.render.ViewTransform
 import com.jwwviewer.app.translate.JaTranslator
+import kotlin.math.abs
+import kotlin.math.hypot
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -125,69 +129,87 @@ fun JwwViewerScreen(
             tonalElevation = 2.dp,
             shadowElevation = 1.dp,
         ) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
                     .padding(start = 2.dp, end = 4.dp, top = 2.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
-                ViewerToolButton(
-                    icon = Icons.AutoMirrored.Rounded.ArrowBack,
-                    label = stringResource(R.string.tool_back),
-                    onClick = onBack,
-                )
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ViewerToolButton(
+                        icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                        label = stringResource(R.string.tool_back),
+                        onClick = onBack,
+                        compact = true,
+                    )
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f)
+                            .widthIn(min = 0.dp)
+                            .padding(horizontal = 4.dp),
+                    )
+                }
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 4.dp),
-                )
-                ViewerToolButton(
-                    icon = Icons.Rounded.ScreenRotation,
-                    label = stringResource(R.string.tool_rotate),
-                    onClick = {
-                        rotationDeg = (rotationDeg + 90f) % 360f
-                        fitted = false
-                        offset = Offset.Zero
-                    },
-                )
-                ViewerToolButton(
-                    icon = Icons.Rounded.ZoomOutMap,
-                    label = stringResource(R.string.tool_fit),
-                    onClick = {
-                        fitted = false
-                        offset = Offset.Zero
-                    },
-                )
-                ViewerToolButton(
-                    icon = Icons.Rounded.Straighten,
-                    label = stringResource(R.string.tool_measure),
-                    onClick = {
-                        measureMode = !measureMode
-                        if (!measureMode) {
-                            measureA = null
-                            measureB = null
-                        } else {
-                            placeMemoMode = false
-                            measureA = null
-                            measureB = null
-                        }
-                    },
-                )
-                ViewerToolButton(
-                    icon = Icons.AutoMirrored.Rounded.StickyNote2,
-                    label = stringResource(R.string.tool_memo),
-                    onClick = { showMemoPanel = true },
-                )
-                ViewerToolButton(
-                    icon = Icons.Rounded.Layers,
-                    label = stringResource(R.string.tool_layers),
-                    onClick = { showLayers = true },
-                )
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ViewerToolButton(
+                        icon = Icons.Rounded.ScreenRotation,
+                        label = stringResource(R.string.tool_rotate),
+                        compact = true,
+                        onClick = {
+                            rotationDeg = (rotationDeg + 90f) % 360f
+                            fitted = false
+                            offset = Offset.Zero
+                        },
+                    )
+                    ViewerToolButton(
+                        icon = Icons.Rounded.ZoomOutMap,
+                        label = stringResource(R.string.tool_fit),
+                        compact = true,
+                        onClick = {
+                            fitted = false
+                            offset = Offset.Zero
+                        },
+                    )
+                    ViewerToolButton(
+                        icon = Icons.Rounded.Straighten,
+                        label = stringResource(R.string.tool_measure),
+                        compact = true,
+                        onClick = {
+                            measureMode = !measureMode
+                            if (!measureMode) {
+                                measureA = null
+                                measureB = null
+                            } else {
+                                placeMemoMode = false
+                                measureA = null
+                                measureB = null
+                            }
+                        },
+                    )
+                    ViewerToolButton(
+                        icon = Icons.AutoMirrored.Rounded.StickyNote2,
+                        label = stringResource(R.string.tool_memo),
+                        compact = true,
+                        onClick = { showMemoPanel = true },
+                    )
+                    ViewerToolButton(
+                        icon = Icons.Rounded.Layers,
+                        label = stringResource(R.string.tool_layers),
+                        compact = true,
+                        onClick = { showLayers = true },
+                    )
+                }
             }
         }
 
@@ -286,6 +308,7 @@ fun JwwViewerScreen(
                 )
                 drawing != null -> {
                     val bounds = drawing.bounds
+                    val snapPx = with(density) { 40.dp.toPx() }
                     Canvas(
                         modifier = Modifier
                             .fillMaxSize()
@@ -306,6 +329,7 @@ fun JwwViewerScreen(
                                 placeMemoMode,
                                 measureMode,
                                 memos,
+                                snapPx,
                             ) {
                                 detectTapGestures { tap ->
                                     val b = bounds ?: return@detectTapGestures
@@ -316,7 +340,15 @@ fun JwwViewerScreen(
                                     )
 
                                     if (measureMode) {
-                                        val world = vt.screenToWorld(tap.x, tap.y)
+                                        // Snap to CAD geometry (JW_CAD-style), never raw screen point
+                                        val snapped = CadSnap.snap(
+                                            drawing = drawing,
+                                            layerVisible = layerVisible,
+                                            tap = tap,
+                                            vt = vt,
+                                            maxScreenDistPx = snapPx,
+                                        ) ?: return@detectTapGestures
+                                        val world = snapped.world
                                         when {
                                             measureA == null || measureB != null -> {
                                                 measureA = world
@@ -847,13 +879,18 @@ private fun TranslateNoteSheet(
 private fun Color.luminance(): Float =
     0.2126f * red + 0.7152f * green + 0.0722f * blue
 
-/** Format CAD world distance (JWW coords ≈ mm thực). */
+/** Format CAD world distance — JWW coordinates are real mm on the drawing. */
 private fun formatMeasure(mm: Double): String {
-    val abs = kotlin.math.abs(mm)
-    return when {
-        abs >= 1000.0 -> String.format("%.3f m / %.1f mm", mm / 1000.0, mm)
-        abs >= 10.0 -> String.format("%.1f mm", mm)
-        else -> String.format("%.3f mm", mm)
+    val a = abs(mm)
+    val mmLabel = when {
+        abs(mm - mm.roundToInt()) < 0.05 -> String.format("%.0f mm", mm)
+        a >= 100.0 -> String.format("%.1f mm", mm)
+        else -> String.format("%.2f mm", mm)
+    }
+    return if (a >= 1000.0) {
+        String.format("%s (%.3f m)", mmLabel, mm / 1000.0)
+    } else {
+        mmLabel
     }
 }
 

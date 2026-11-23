@@ -157,9 +157,12 @@ private fun HomePane(
                 style = if (adaptive.isCompact) {
                     MaterialTheme.typography.headlineMedium
                 } else {
-                    MaterialTheme.typography.displayLarge
+                    MaterialTheme.typography.headlineLarge
                 },
                 color = scheme.onBackground,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = onSettings) {
@@ -275,6 +278,9 @@ private fun WideHintPane(
         Text(
             text = stringResource(R.string.app_name),
             style = MaterialTheme.typography.headlineMedium,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(

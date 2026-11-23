@@ -71,7 +71,7 @@
     <string name="memo_delete">删除</string>
     <string name="memo_untitled">（空）</string>
     <string name="save_on_exit_title">保存到应用？</string>
-    <string name="save_on_exit_message">“%1$s”是从其他应用或链接打开的。要在 JwwViewer 中保存副本以便在“最近”中再次打开吗？</string>
+    <string name="save_on_exit_message">“%1$s”是从其他应用或链接打开的。要保存到 Documents/JwwViewer 以便在“最近”中再次打开吗？</string>
     <string name="save_on_exit_save">保存</string>
     <string name="save_on_exit_discard">不保存</string>
     <string name="save_on_exit_saving">正在保存…</string>
@@ -93,10 +93,10 @@
     <string name="update_no_apk">有新版本 %1$s 但没有 APK 文件</string>
     <string name="update_fail">更新失败：%1$s</string>
     <string name="update_need_install_perm">请允许从此来源安装应用，然后重试</string>
-    <string name="measure_pick_b">测距：点按终点 B</string>
+    <string name="measure_pick_b">测距：点按第二点 (B)</string>
     <string name="measure_reset">重置</string>
     <string name="author_name">Nguyen The Manh</string>
-    <string name="measure_result">%1$s  ·  比例 1:%2$s</string>
+    <string name="measure_result">%1$s · 文件比例 1:%2$s</string>
     <string name="tool_measure">测距</string>
-    <string name="measure_pick_a">测距：点按起点 A</string>
+    <string name="measure_pick_a">测距：点按图纸端点/线段附近 (A)</string>
 </resources>

@@ -71,7 +71,7 @@
     <string name="memo_delete">Delete</string>
     <string name="memo_untitled">(Empty)</string>
     <string name="save_on_exit_title">Save file to the app?</string>
-    <string name="save_on_exit_message">“%1$s” was opened from another app or a link. Save a copy in JwwViewer so it appears in Recent?</string>
+    <string name="save_on_exit_message">“%1$s” was opened from another app or a link. Save a copy to Documents/JwwViewer so it appears in Recent?</string>
     <string name="save_on_exit_save">Save</string>
     <string name="save_on_exit_discard">Don’t save</string>
     <string name="save_on_exit_saving">Saving…</string>
@@ -93,10 +93,10 @@
     <string name="update_no_apk">New version %1$s found but no APK asset</string>
     <string name="update_fail">Update failed: %1$s</string>
     <string name="update_need_install_perm">Allow installing apps from this source, then try again</string>
-    <string name="measure_pick_b">Measure: tap point B</string>
+    <string name="measure_pick_b">Measure: tap second point/edge (B)</string>
     <string name="measure_reset">Reset</string>
     <string name="author_name">Nguyen The Manh</string>
-    <string name="measure_result">%1$s  ·  scale 1:%2$s</string>
+    <string name="measure_result">%1$s · file scale 1:%2$s</string>
     <string name="tool_measure">Measure</string>
-    <string name="measure_pick_a">Measure: tap point A</string>
+    <string name="measure_pick_a">Measure: tap near a drawing point/edge (A)</string>
 </resources>
