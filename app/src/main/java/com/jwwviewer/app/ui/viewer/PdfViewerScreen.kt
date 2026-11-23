@@ -42,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -53,7 +54,9 @@ import androidx.compose.ui.unit.dp
 import com.jwwviewer.app.R
 import com.jwwviewer.app.data.AppSettings
 import com.jwwviewer.app.data.PerformanceMode
+import kotlin.math.min
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -108,37 +111,31 @@ fun PdfViewerScreen(
             tonalElevation = 2.dp,
             shadowElevation = 1.dp,
         ) {
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
                     .padding(start = 2.dp, end = 4.dp, top = 2.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ViewerToolButton(
-                        icon = Icons.AutoMirrored.Rounded.ArrowBack,
-                        label = stringResource(R.string.tool_back),
-                        onClick = onBack,
-                        compact = true,
-                    )
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .weight(1f)
-                            .widthIn(min = 0.dp)
-                            .padding(horizontal = 4.dp),
-                    )
-                }
-                Row(
+                ViewerToolButton(
+                    icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                    label = stringResource(R.string.tool_back),
+                    onClick = onBack,
+                    compact = true,
+                )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
+                        .weight(1f)
+                        .widthIn(min = 0.dp)
+                        .padding(horizontal = 4.dp),
+                )
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (pageCount > 0) {
@@ -150,7 +147,7 @@ fun PdfViewerScreen(
                             ),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 8.dp),
+                            modifier = Modifier.padding(end = 4.dp),
                         )
                     }
                     ViewerToolButton(
@@ -229,10 +226,17 @@ private fun PdfPage(
     var bitmap by remember(pageIndex, performance, largeScreen) { mutableStateOf<Bitmap?>(null) }
     var scale by remember(pageIndex) { mutableFloatStateOf(1f) }
     var offset by remember(pageIndex) { mutableStateOf(Offset.Zero) }
-    val raster = if (largeScreen) {
-        maxOf(performance.pdfRasterScale, 2.5f)
+    val baseRaster = if (largeScreen) {
+        maxOf(performance.pdfRasterScale, 4f)
     } else {
         performance.pdfRasterScale
+    }
+    // Extra raster when pinched in deep so text/lines stay sharp
+    val boostRaster = when {
+        scale >= 12f -> min(baseRaster * 2.2f, 12f)
+        scale >= 6f -> min(baseRaster * 1.7f, 10f)
+        scale >= 3f -> min(baseRaster * 1.35f, 8f)
+        else -> baseRaster
     }
 
     LaunchedEffect(fitNonce) {
@@ -240,25 +244,20 @@ private fun PdfPage(
         offset = Offset.Zero
     }
 
-    LaunchedEffect(pageIndex, renderer, performance, largeScreen) {
-        bitmap = withContext(Dispatchers.Default) {
-            synchronized(renderer) {
-                renderer.openPage(pageIndex).use { page ->
-                    val w = (page.width * raster).toInt().coerceAtLeast(1)
-                    val h = (page.height * raster).toInt().coerceAtLeast(1)
-                    val config = if (performance == PerformanceMode.LOW && !largeScreen) {
-                        Bitmap.Config.RGB_565
-                    } else {
-                        Bitmap.Config.ARGB_8888
-                    }
-                    val bmp = Bitmap.createBitmap(w, h, config)
-                    page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                    bmp
-                }
-            }
+    LaunchedEffect(pageIndex, renderer, performance, largeScreen, boostRaster) {
+        if (boostRaster > baseRaster + 0.05f) delay(140)
+        val previous = bitmap
+        val rendered = withContext(Dispatchers.Default) {
+            renderPdfPage(renderer, pageIndex, boostRaster, performance, largeScreen)
         }
-        scale = 1f
-        offset = Offset.Zero
+        bitmap = rendered
+        if (previous != null && previous !== rendered) {
+            previous.recycle()
+        }
+        if (boostRaster <= baseRaster + 0.05f) {
+            scale = 1f
+            offset = Offset.Zero
+        }
     }
 
     Box(
@@ -266,7 +265,8 @@ private fun PdfPage(
             .fillMaxSize()
             .pointerInput(pageIndex) {
                 detectTransformGestures { _, pan, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(1f, 5f)
+                    // Deep zoom — previously capped at 5x
+                    scale = (scale * zoom).coerceIn(PDF_MIN_ZOOM, PDF_MAX_ZOOM)
                     offset += pan
                 }
             },
@@ -280,6 +280,7 @@ private fun PdfPage(
                 bitmap = bmp.asImageBitmap(),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
+                filterQuality = FilterQuality.High,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
@@ -289,6 +290,39 @@ private fun PdfPage(
                         translationY = offset.y
                     },
             )
+        }
+    }
+}
+
+private const val PDF_MIN_ZOOM = 0.35f
+private const val PDF_MAX_ZOOM = 40f
+private const val PDF_MAX_BITMAP_EDGE = 8192
+
+private fun renderPdfPage(
+    renderer: PdfRenderer,
+    pageIndex: Int,
+    raster: Float,
+    performance: PerformanceMode,
+    largeScreen: Boolean,
+): Bitmap {
+    synchronized(renderer) {
+        renderer.openPage(pageIndex).use { page ->
+            var w = (page.width * raster).toInt().coerceAtLeast(1)
+            var h = (page.height * raster).toInt().coerceAtLeast(1)
+            val maxEdge = maxOf(w, h)
+            if (maxEdge > PDF_MAX_BITMAP_EDGE) {
+                val k = PDF_MAX_BITMAP_EDGE.toFloat() / maxEdge
+                w = (w * k).toInt().coerceAtLeast(1)
+                h = (h * k).toInt().coerceAtLeast(1)
+            }
+            val config = if (performance == PerformanceMode.LOW && !largeScreen) {
+                Bitmap.Config.RGB_565
+            } else {
+                Bitmap.Config.ARGB_8888
+            }
+            val bmp = Bitmap.createBitmap(w, h, config)
+            page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            return bmp
         }
     }
 }

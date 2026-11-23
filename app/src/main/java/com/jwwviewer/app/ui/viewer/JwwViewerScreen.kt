@@ -129,37 +129,31 @@ fun JwwViewerScreen(
             tonalElevation = 2.dp,
             shadowElevation = 1.dp,
         ) {
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
                     .padding(start = 2.dp, end = 4.dp, top = 2.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ViewerToolButton(
-                        icon = Icons.AutoMirrored.Rounded.ArrowBack,
-                        label = stringResource(R.string.tool_back),
-                        onClick = onBack,
-                        compact = true,
-                    )
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .weight(1f)
-                            .widthIn(min = 0.dp)
-                            .padding(horizontal = 4.dp),
-                    )
-                }
-                Row(
+                ViewerToolButton(
+                    icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                    label = stringResource(R.string.tool_back),
+                    onClick = onBack,
+                    compact = true,
+                )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
+                        .weight(1f)
+                        .widthIn(min = 0.dp)
+                        .padding(horizontal = 4.dp),
+                )
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     ViewerToolButton(

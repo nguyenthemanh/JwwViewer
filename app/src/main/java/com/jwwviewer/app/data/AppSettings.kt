@@ -36,12 +36,12 @@ enum class PerformanceMode(val tag: String) {
     HIGH("high"),
     ;
 
-    /** PDF page bitmap scale vs native page size */
+    /** PDF page bitmap scale vs native page size (higher = sharper deep zoom). */
     val pdfRasterScale: Float
         get() = when (this) {
-            LOW -> 1f
-            BALANCED -> 2f
-            HIGH -> 3f
+            LOW -> 1.5f
+            BALANCED -> 3f
+            HIGH -> 5f
         }
 
     val drawTexts: Boolean
