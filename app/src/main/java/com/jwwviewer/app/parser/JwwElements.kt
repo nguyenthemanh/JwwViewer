@@ -132,9 +132,18 @@ data class JwwDrawing(
     val version: Int,
     val memo: String,
     val scales: DoubleArray,
+    /** Active scale group index (0..15) from JWW header. */
+    val writeGroup: Int,
     /** 256 layer visibility states: 0 hidden, >=1 visible */
     val layerStates: IntArray,
     val layerNames: Array<String>,
     val elements: List<JwwElement>,
     val bounds: JwwBounds?,
-)
+) {
+    /** JW_CAD scale S for the write group (1:S). 0 / invalid → 1. */
+    val activeScale: Double
+        get() {
+            val s = scales.getOrElse(writeGroup.coerceIn(0, 15)) { 1.0 }
+            return if (s.isFinite() && s > 0.0) s else 1.0
+        }
+}

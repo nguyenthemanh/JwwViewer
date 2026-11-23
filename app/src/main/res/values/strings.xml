@@ -93,4 +93,10 @@
     <string name="update_no_apk">New version %1$s found but no APK asset</string>
     <string name="update_fail">Update failed: %1$s</string>
     <string name="update_need_install_perm">Allow installing apps from this source, then try again</string>
+    <string name="measure_pick_b">Measure: tap point B</string>
+    <string name="measure_reset">Reset</string>
+    <string name="author_name">Nguyen The Manh</string>
+    <string name="measure_result">%1$s  ·  scale 1:%2$s</string>
+    <string name="tool_measure">Measure</string>
+    <string name="measure_pick_a">Measure: tap point A</string>
 </resources>

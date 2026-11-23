@@ -93,4 +93,10 @@
     <string name="update_no_apk">新しいバージョン %1$s がありますが APK がありません</string>
     <string name="update_fail">更新に失敗しました: %1$s</string>
     <string name="update_need_install_perm">このソースからのインストールを許可してから再試行してください</string>
+    <string name="measure_pick_b">計測: 点Bをタップ</string>
+    <string name="measure_reset">リセット</string>
+    <string name="author_name">Nguyen The Manh</string>
+    <string name="measure_result">%1$s  ·  尺度 1:%2$s</string>
+    <string name="tool_measure">計測</string>
+    <string name="measure_pick_a">計測: 点Aをタップ</string>
 </resources>

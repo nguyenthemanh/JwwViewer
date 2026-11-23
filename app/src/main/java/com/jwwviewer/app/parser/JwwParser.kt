@@ -36,6 +36,7 @@ object JwwParser {
             version = header.version,
             memo = header.memo,
             scales = header.scales,
+            writeGroup = header.writeGroup,
             layerStates = header.layerStates,
             layerNames = header.layerNames,
             elements = elements,
@@ -62,6 +63,7 @@ object JwwParser {
         val version: Int,
         val memo: String,
         val scales: DoubleArray,
+        val writeGroup: Int,
         val layerStates: IntArray,
         val layerNames: Array<String>,
     )
@@ -73,7 +75,7 @@ object JwwParser {
         require(ver >= 230) { "Unsupported JWW version $ver" }
         val memo = r.readCString()
         r.readDword() // paper
-        r.readDword() // write group
+        val writeGroup = r.readDword().coerceIn(0, 15)
         val scales = DoubleArray(16)
         val layerStates = IntArray(256)
         val layerNames = Array(256) { "" }
@@ -146,7 +148,7 @@ object JwwParser {
         r.readDouble(); r.readDouble(); r.readDword()
         r.readDouble(); r.readDouble(); r.readDouble()
         r.readDouble(); r.readDouble(); r.readDouble()
-        return Header(ver, memo, scales, layerStates, layerNames)
+        return Header(ver, memo, scales, writeGroup, layerStates, layerNames)
     }
 
     private fun readAttr(r: MfcReader, ver: Int): JwwAttr {

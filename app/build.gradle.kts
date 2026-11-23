@@ -12,11 +12,10 @@ android {
         applicationId = "com.jwwviewer.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.1-beta"
+        versionCode = 3
+        versionName = "1.0.2-beta"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "GITHUB_REPO", "\"nguyenthemanh/JwwViewer\"")
-        buildConfigField("String", "AUTHOR_NAME", "\"Nguyễn Thế Mạnh\"")
         buildConfigField("String", "AUTHOR_URL", "\"https://www.facebook.com/nnguyenthemanh\"")
     }
 

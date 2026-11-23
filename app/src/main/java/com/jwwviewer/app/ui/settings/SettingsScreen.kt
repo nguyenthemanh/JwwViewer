@@ -31,7 +31,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -294,11 +293,11 @@ private fun AboutBlock() {
 
     Text(stringResource(R.string.section_author), style = MaterialTheme.typography.titleMedium)
     Text(
-        text = BuildConfig.AUTHOR_NAME,
+        text = stringResource(R.string.author_name),
         style = MaterialTheme.typography.titleLarge,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier
-            .padding(top = 4.dp)
+            .padding(top = 4.dp, bottom = 8.dp)
             .clickable {
                 runCatching {
                     context.startActivity(
@@ -311,24 +310,8 @@ private fun AboutBlock() {
         text = stringResource(R.string.author_role),
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 8.dp),
     )
-    Text(
-        text = stringResource(R.string.author_tap_hint),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(bottom = 4.dp),
-    )
-    TextButton(
-        onClick = {
-            runCatching {
-                context.startActivity(
-                    Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.AUTHOR_URL)),
-                )
-            }
-        },
-    ) {
-        Text(stringResource(R.string.btn_author_facebook))
-    }
 
     Spacer(modifier = Modifier.height(8.dp))
     Row(

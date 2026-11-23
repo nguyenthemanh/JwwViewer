@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.GTranslate
 import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.ScreenRotation
+import androidx.compose.material.icons.rounded.Straighten
 import androidx.compose.material.icons.rounded.ZoomOutMap
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -58,12 +59,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.jwwviewer.app.R
+import kotlin.math.hypot
+import kotlin.math.roundToInt
 import com.jwwviewer.app.data.AppLanguage
 import com.jwwviewer.app.data.AppSettings
 import com.jwwviewer.app.data.DrawingMemo
@@ -96,6 +101,9 @@ fun JwwViewerScreen(
     var showLayers by remember { mutableStateOf(false) }
     var showMemoPanel by remember { mutableStateOf(false) }
     var placeMemoMode by remember { mutableStateOf(false) }
+    var measureMode by remember { mutableStateOf(false) }
+    var measureA by remember(drawing) { mutableStateOf<Offset?>(null) }
+    var measureB by remember(drawing) { mutableStateOf<Offset?>(null) }
     var memos by remember(drawing) { mutableStateOf<List<DrawingMemo>>(emptyList()) }
     var editingMemo by remember { mutableStateOf<DrawingMemo?>(null) }
     var selectedHit by remember { mutableStateOf<CadTextHit?>(null) }
@@ -156,6 +164,21 @@ fun JwwViewerScreen(
                     },
                 )
                 ViewerToolButton(
+                    icon = Icons.Rounded.Straighten,
+                    label = stringResource(R.string.tool_measure),
+                    onClick = {
+                        measureMode = !measureMode
+                        if (!measureMode) {
+                            measureA = null
+                            measureB = null
+                        } else {
+                            placeMemoMode = false
+                            measureA = null
+                            measureB = null
+                        }
+                    },
+                )
+                ViewerToolButton(
                     icon = Icons.AutoMirrored.Rounded.StickyNote2,
                     label = stringResource(R.string.tool_memo),
                     onClick = { showMemoPanel = true },
@@ -186,6 +209,60 @@ fun JwwViewerScreen(
                         modifier = Modifier.weight(1f),
                     )
                     TextButton(onClick = { placeMemoMode = false }) {
+                        Text(stringResource(R.string.memo_cancel_place))
+                    }
+                }
+            }
+        }
+
+        if (measureMode) {
+            val a = measureA
+            val b = measureB
+            val scaleS = drawing?.activeScale ?: 1.0
+            val distWorld = if (a != null && b != null) {
+                hypot((b.x - a.x).toDouble(), (b.y - a.y).toDouble())
+            } else {
+                null
+            }
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = when {
+                            distWorld != null -> stringResource(
+                                R.string.measure_result,
+                                formatMeasure(distWorld),
+                                formatScaleLabel(scaleS),
+                            )
+                            a != null -> stringResource(R.string.measure_pick_b)
+                            else -> stringResource(R.string.measure_pick_a)
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        onClick = {
+                            measureA = null
+                            measureB = null
+                        },
+                    ) {
+                        Text(stringResource(R.string.measure_reset))
+                    }
+                    TextButton(
+                        onClick = {
+                            measureMode = false
+                            measureA = null
+                            measureB = null
+                        },
+                    ) {
                         Text(stringResource(R.string.memo_cancel_place))
                     }
                 }
@@ -227,12 +304,28 @@ fun JwwViewerScreen(
                                 settings.fontScale,
                                 settings.performance.drawTexts,
                                 placeMemoMode,
+                                measureMode,
                                 memos,
                             ) {
                                 detectTapGestures { tap ->
                                     val b = bounds ?: return@detectTapGestures
                                     val vw = size.width.toFloat()
                                     val vh = size.height.toFloat()
+                                    val vt = ViewTransform(
+                                        b, vw, vh, scale, offset.x, offset.y, rotationDeg,
+                                    )
+
+                                    if (measureMode) {
+                                        val world = vt.screenToWorld(tap.x, tap.y)
+                                        when {
+                                            measureA == null || measureB != null -> {
+                                                measureA = world
+                                                measureB = null
+                                            }
+                                            else -> measureB = world
+                                        }
+                                        return@detectTapGestures
+                                    }
 
                                     val memoHit = CadTextHitTester.hitMemo(
                                         memos = memos,
@@ -253,9 +346,7 @@ fun JwwViewerScreen(
                                     }
 
                                     if (placeMemoMode) {
-                                        val world = ViewTransform(
-                                            b, vw, vh, scale, offset.x, offset.y, rotationDeg,
-                                        ).screenToWorld(tap.x, tap.y)
+                                        val world = vt.screenToWorld(tap.x, tap.y)
                                         val created = DrawingMemo(
                                             x = world.x,
                                             y = world.y,
@@ -310,6 +401,45 @@ fun JwwViewerScreen(
                                 rotationDeg = rotationDeg,
                                 memos = memos,
                             )
+                            val a = measureA
+                            val b = measureB
+                            if (measureMode && a != null) {
+                                val vt = ViewTransform(
+                                    bounds,
+                                    size.width.toFloat(),
+                                    size.height.toFloat(),
+                                    scale,
+                                    offset.x,
+                                    offset.y,
+                                    rotationDeg,
+                                )
+                                val sa = vt.worldToScreen(a.x, a.y)
+                                val measureColor = Color(0xFFE65100)
+                                drawCircle(measureColor, radius = 8f, center = sa)
+                                drawCircle(
+                                    Color.White,
+                                    radius = 8f,
+                                    center = sa,
+                                    style = Stroke(width = 2f),
+                                )
+                                if (b != null) {
+                                    val sb = vt.worldToScreen(b.x, b.y)
+                                    drawLine(
+                                        color = measureColor,
+                                        start = sa,
+                                        end = sb,
+                                        strokeWidth = 3f,
+                                        cap = StrokeCap.Round,
+                                    )
+                                    drawCircle(measureColor, radius = 8f, center = sb)
+                                    drawCircle(
+                                        Color.White,
+                                        radius = 8f,
+                                        center = sb,
+                                        style = Stroke(width = 2f),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -358,6 +488,11 @@ fun JwwViewerScreen(
             placeMemoMode = placeMemoMode,
             onTogglePlace = {
                 placeMemoMode = !placeMemoMode
+                if (placeMemoMode) {
+                    measureMode = false
+                    measureA = null
+                    measureB = null
+                }
                 showMemoPanel = false
             },
             onOpenMemo = { editingMemo = it; showMemoPanel = false },
@@ -711,3 +846,22 @@ private fun TranslateNoteSheet(
 
 private fun Color.luminance(): Float =
     0.2126f * red + 0.7152f * green + 0.0722f * blue
+
+/** Format CAD world distance (JWW coords ≈ mm thực). */
+private fun formatMeasure(mm: Double): String {
+    val abs = kotlin.math.abs(mm)
+    return when {
+        abs >= 1000.0 -> String.format("%.3f m / %.1f mm", mm / 1000.0, mm)
+        abs >= 10.0 -> String.format("%.1f mm", mm)
+        else -> String.format("%.3f mm", mm)
+    }
+}
+
+private fun formatScaleLabel(scale: Double): String {
+    val n = if (kotlin.math.abs(scale - scale.roundToInt()) < 1e-6) {
+        scale.roundToInt().toString()
+    } else {
+        String.format("%.3f", scale)
+    }
+    return n
+}

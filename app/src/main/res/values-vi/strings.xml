@@ -93,4 +93,10 @@
     <string name="update_no_apk">Có bản mới %1$s nhưng không thấy file APK</string>
     <string name="update_fail">Không cập nhật được: %1$s</string>
     <string name="update_need_install_perm">Cho phép cài app từ nguồn này rồi nhấn lại</string>
+    <string name="measure_pick_b">Đo: chạm điểm B</string>
+    <string name="measure_reset">Đặt lại</string>
+    <string name="author_name">Nguyễn Thế Mạnh</string>
+    <string name="measure_result">%1$s  ·  tỷ lệ 1:%2$s</string>
+    <string name="tool_measure">Đo</string>
+    <string name="measure_pick_a">Đo: chạm điểm A</string>
 </resources>
