@@ -246,19 +246,25 @@ fun JwwViewerScreen(
                     drawing.scaleForGroup(a.gLayer)
                 else -> null
             }
-            val paperMm = if (a != null && b != null) {
-                hypot(
-                    (b.world.x - a.world.x).toDouble(),
-                    (b.world.y - a.world.y).toDouble(),
-                )
+            // JW_cad Viewer: show 横 / 縦 / 斜め (H / V / diagonal)
+            val paperDx = if (a != null && b != null) {
+                kotlin.math.abs((b.world.x - a.world.x).toDouble())
             } else {
                 null
             }
-            val distRealMm = if (paperMm != null && sameGroupScale != null) {
-                paperMm * sameGroupScale
+            val paperDy = if (a != null && b != null) {
+                kotlin.math.abs((b.world.y - a.world.y).toDouble())
             } else {
                 null
             }
+            val paperDiag = if (paperDx != null && paperDy != null) {
+                hypot(paperDx, paperDy)
+            } else {
+                null
+            }
+            val s = sameGroupScale
+            val lastSnap = b ?: a
+            val snapLabel = lastSnap?.let { snapKindLabel(it.kind) }
             Surface(
                 color = MaterialTheme.colorScheme.secondaryContainer,
                 modifier = Modifier.fillMaxWidth(),
@@ -270,24 +276,37 @@ fun JwwViewerScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(
-                        text = when {
-                            distRealMm != null -> stringResource(
-                                R.string.measure_result,
-                                formatMeasure(distRealMm),
-                                formatScaleLabel(sameGroupScale ?: 1.0),
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = when {
+                                paperDx != null && paperDy != null && paperDiag != null && s != null ->
+                                    stringResource(
+                                        R.string.measure_hvd,
+                                        formatMeasure(paperDx * s),
+                                        formatMeasure(paperDy * s),
+                                        formatMeasure(paperDiag * s),
+                                        formatScaleLabel(s),
+                                    )
+                                paperDx != null && paperDy != null && paperDiag != null ->
+                                    stringResource(
+                                        R.string.measure_hvd_paper,
+                                        formatMeasure(paperDx),
+                                        formatMeasure(paperDy),
+                                        formatMeasure(paperDiag),
+                                    )
+                                a != null -> stringResource(R.string.measure_pick_b)
+                                else -> stringResource(R.string.measure_pick_a)
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        if (snapLabel != null) {
+                            Text(
+                                text = stringResource(R.string.measure_snap_kind, snapLabel),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = Color(0xFFC62828),
                             )
-                            paperMm != null && sameGroupScale == null && a != null && b != null ->
-                                stringResource(
-                                    R.string.measure_result_paper,
-                                    formatMeasure(paperMm),
-                                )
-                            a != null -> stringResource(R.string.measure_pick_b)
-                            else -> stringResource(R.string.measure_pick_a)
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
-                    )
+                        }
+                    }
                     TextButton(
                         onClick = {
                             measureA = null
@@ -353,11 +372,12 @@ fun JwwViewerScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .onSizeChanged { canvasSize = it }
-                            .pointerInput(Unit) {
+                            .pointerInput(measureMode, placeMemoMode) {
+                                // Lock pan/zoom while measuring — drag skews perceived size
+                                if (measureMode || placeMemoMode) return@pointerInput
                                 detectTransformGestures { centroid, pan, zoom, _ ->
                                     val newScale = (scale * zoom).coerceIn(0.001f, 500f)
                                     val z = newScale / scale
-                                    // Keep world point under pinch centroid fixed
                                     val pivot = Offset(
                                         centroid.x - size.width * 0.5f,
                                         centroid.y - size.height * 0.5f,
@@ -484,29 +504,52 @@ fun JwwViewerScreen(
                                 rotationDeg,
                             )
                             val sa = vt.worldToScreen(a.world.x, a.world.y)
-                            val measureColor = Color(0xFFE65100)
-                            drawCircle(measureColor, radius = 8f, center = sa)
+                            // JW_cad Viewer: blue handles; red when snapped
+                            fun handleColor(kind: CadSnap.Kind): Color =
+                                if (kind == CadSnap.Kind.Nearest) Color(0xFF1565C0)
+                                else Color(0xFFC62828)
+                            val ca = handleColor(a.kind)
+                            drawCircle(ca, radius = 10f, center = sa)
                             drawCircle(
                                 Color.White,
-                                radius = 8f,
+                                radius = 10f,
                                 center = sa,
-                                style = Stroke(width = 2f),
+                                style = Stroke(width = 2.5f),
                             )
                             if (bPt != null) {
                                 val sb = vt.worldToScreen(bPt.world.x, bPt.world.y)
+                                // H/V along drawing axes (図寸 X/Y), NOT screen axes —
+                                // screen L-shape looked “kéo chéo” and mismatched sizes
+                                val cornerWorld = Offset(bPt.world.x, a.world.y)
+                                val sc = vt.worldToScreen(cornerWorld.x, cornerWorld.y)
                                 drawLine(
-                                    color = measureColor,
+                                    color = Color(0xFF1565C0).copy(alpha = 0.55f),
+                                    start = sa,
+                                    end = sc,
+                                    strokeWidth = 2f,
+                                    cap = StrokeCap.Round,
+                                )
+                                drawLine(
+                                    color = Color(0xFF1565C0).copy(alpha = 0.55f),
+                                    start = sc,
+                                    end = sb,
+                                    strokeWidth = 2f,
+                                    cap = StrokeCap.Round,
+                                )
+                                drawLine(
+                                    color = Color(0xFFE65100),
                                     start = sa,
                                     end = sb,
                                     strokeWidth = 3f,
                                     cap = StrokeCap.Round,
                                 )
-                                drawCircle(measureColor, radius = 8f, center = sb)
+                                val cb = handleColor(bPt.kind)
+                                drawCircle(cb, radius = 10f, center = sb)
                                 drawCircle(
                                     Color.White,
-                                    radius = 8f,
+                                    radius = 10f,
                                     center = sb,
-                                    style = Stroke(width = 2f),
+                                    style = Stroke(width = 2.5f),
                                 )
                             }
                         }
@@ -579,6 +622,7 @@ fun JwwViewerScreen(
                 .distinct()
                 .sorted()
         }
+        val groups = remember(used) { used.map { it / 16 }.distinct().sorted() }
         ModalBottomSheet(
             onDismissRequest = { showLayers = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -588,6 +632,39 @@ fun JwwViewerScreen(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
+            // JW_cad Viewer: layer group show/hide
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TextButton(
+                    onClick = {
+                        used.forEach { layerVisible[it] = true }
+                        layerTick++
+                    },
+                ) { Text(stringResource(R.string.layers_all_on)) }
+                TextButton(
+                    onClick = {
+                        used.forEach { layerVisible[it] = false }
+                        layerTick++
+                    },
+                ) { Text(stringResource(R.string.layers_all_off)) }
+                groups.forEach { g ->
+                    TextButton(
+                        onClick = {
+                            val idxs = used.filter { it / 16 == g }
+                            val allOn = idxs.all { layerVisible[it] }
+                            idxs.forEach { layerVisible[it] = !allOn }
+                            layerTick++
+                        },
+                    ) {
+                        Text(stringResource(R.string.layers_group_toggle, g))
+                    }
+                }
+            }
             LazyColumn {
                 items(used) { idx ->
                     val name = drawing.layerNames.getOrElse(idx) { "" }
@@ -916,6 +993,16 @@ private fun TranslateNoteSheet(
 }
 
 /** Format real-world length (実寸 mm) after paper×scale conversion. */
+@Composable
+private fun snapKindLabel(kind: CadSnap.Kind): String = stringResource(
+    when (kind) {
+        CadSnap.Kind.End -> R.string.snap_kind_end
+        CadSnap.Kind.Mid -> R.string.snap_kind_mid
+        CadSnap.Kind.Center -> R.string.snap_kind_center
+        CadSnap.Kind.Nearest -> R.string.snap_kind_nearest
+    },
+)
+
 private fun formatMeasure(mm: Double): String {
     val a = abs(mm)
     val mmLabel = when {

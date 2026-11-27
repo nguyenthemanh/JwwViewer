@@ -99,6 +99,17 @@
     <string name="author_name">Nguyen The Manh</string>
     <string name="measure_result">%1$s · file scale 1:%2$s</string>
     <string name="measure_result_paper">%1$s · paper mm (mixed scales)</string>
+    <!-- JW_cad Viewer style: horizontal / vertical / diagonal -->
+    <string name="measure_hvd">H %1$s · V %2$s · D %3$s · 1:%4$s</string>
+    <string name="measure_hvd_paper">H %1$s · V %2$s · D %3$s · paper mm</string>
+    <string name="measure_snap_kind">Snap: %1$s</string>
+    <string name="snap_kind_end">endpoint</string>
+    <string name="snap_kind_mid">midpoint</string>
+    <string name="snap_kind_center">center</string>
+    <string name="snap_kind_nearest">on line</string>
+    <string name="layers_group_toggle">Group G%1$d</string>
+    <string name="layers_all_on">All on</string>
+    <string name="layers_all_off">All off</string>
     <string name="tool_measure">Measure</string>
     <string name="measure_pick_a">Measure: tap near a drawing point/edge (A)</string>
     <string name="save_dirty_pdf">Save PDF</string>

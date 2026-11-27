@@ -46,6 +46,7 @@ import com.jwwviewer.app.ui.settings.SettingsScreen
 import com.jwwviewer.app.ui.theme.JwwViewerTheme
 import com.jwwviewer.app.ui.viewer.JwwViewerScreen
 import com.jwwviewer.app.ui.viewer.PdfViewerScreen
+import com.jwwviewer.app.update.AutoUpdate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
@@ -117,6 +118,11 @@ class MainActivity : AppCompatActivity() {
                             var openJob by remember { mutableStateOf<Job?>(null) }
                             val memoMutex = remember { Mutex() }
                             var memoSaveGen by remember { mutableIntStateOf(0) }
+
+                            // Auto-check GitHub release on each app launch; download + install if newer.
+                            LaunchedEffect(Unit) {
+                                AutoUpdate.runOncePerProcess(context)
+                            }
 
                             fun goHome() {
                                 openJob?.cancel()

@@ -99,6 +99,16 @@
     <string name="author_name">Nguyễn Thế Mạnh</string>
     <string name="measure_result">%1$s · tỷ lệ file 1:%2$s</string>
     <string name="measure_result_paper">%1$s · mm trên giấy (khác tỷ lệ nhóm)</string>
+    <string name="measure_hvd">Ngang %1$s · Dọc %2$s · Chéo %3$s · 1:%4$s</string>
+    <string name="measure_hvd_paper">Ngang %1$s · Dọc %2$s · Chéo %3$s · mm giấy</string>
+    <string name="measure_snap_kind">Snap: %1$s</string>
+    <string name="snap_kind_end">đầu mút</string>
+    <string name="snap_kind_mid">giữa đoạn</string>
+    <string name="snap_kind_center">tâm</string>
+    <string name="snap_kind_nearest">trên đường</string>
+    <string name="layers_group_toggle">Nhóm G%1$d</string>
+    <string name="layers_all_on">Bật hết</string>
+    <string name="layers_all_off">Tắt hết</string>
     <string name="tool_measure">Đo</string>
     <string name="measure_pick_a">Đo: chạm gần điểm/đoạn bản vẽ (A)</string>
     <string name="save_dirty_pdf">Lưu PDF</string>

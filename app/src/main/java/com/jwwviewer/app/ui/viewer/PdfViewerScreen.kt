@@ -1,10 +1,10 @@
 package com.jwwviewer.app.ui.viewer
 
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
-import android.view.Choreographer
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -67,23 +67,29 @@ import com.jwwviewer.app.R
 import com.jwwviewer.app.data.AppSettings
 import com.jwwviewer.app.data.PerformanceMode
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * PDF viewer — sharpness model from 1.0.17-beta:
- * raster = page.width × pdfRasterScale, boost after zoom settles.
- * Fixes vs 1.0.17: no mid-pinch re-raster (jank), no immediate recycle (white/glitch),
- * centroid pinch, pager swipe at 1×.
+ * PDF viewer — architecture from MuPDF / Nutrient / Android PdfRenderer tiling docs:
+ *
+ * 1) Full-page **base** at screen-fit resolution (smooth pinch via graphicsLayer).
+ * 2) After zoom settles, a **HQ patch** = only the visible viewport, rendered at
+ *    screen pixels (optionally × detailDpi). Patch is drawn in view space (no
+ *    FillBounds-over-page — that caused the white flash).
+ * 3) Never Bitmap.recycle() while Compose may still draw; GC frees old bitmaps.
+ * 4) Hide HQ instantly on the next gesture (base stays).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -270,32 +276,31 @@ private fun PdfPage(
     highQuality: Boolean,
     onZoomedChanged: (Boolean) -> Unit,
 ) {
-    var bitmap by remember(pageIndex) { mutableStateOf<Bitmap?>(null) }
+    var baseBmp by remember(pageIndex) { mutableStateOf<Bitmap?>(null) }
+    var hqBmp by remember(pageIndex) { mutableStateOf<Bitmap?>(null) }
+    var hqVisible by remember(pageIndex) { mutableStateOf(false) }
+    var pagePts by remember(pageIndex) { mutableStateOf(0 to 0) }
     var scale by remember(pageIndex) { mutableFloatStateOf(1f) }
     var offset by remember(pageIndex) { mutableStateOf(Offset.Zero) }
     var viewW by remember { mutableFloatStateOf(0f) }
     var viewH by remember { mutableFloatStateOf(0f) }
-    // Applied raster — updated only after zoom settles (1.0.17 boost, without mid-pinch jank)
-    var appliedRaster by remember(pageIndex) { mutableFloatStateOf(0f) }
+    var gesturing by remember { mutableStateOf(false) }
+    var hqGen by remember(pageIndex) { mutableIntStateOf(0) }
 
-    val baseRaster = if (!highQuality) {
-        2f
-    } else if (largeScreen) {
-        maxOf(performance.pdfRasterScale, 4f)
-    } else {
-        performance.pdfRasterScale
-    }
+    val baseQuality = when {
+        !highQuality -> 1.4f
+        performance == PerformanceMode.LOW -> 1.8f
+        performance == PerformanceMode.BALANCED -> 2.4f
+        else -> 3.0f
+    }.let { q -> if (largeScreen && highQuality) q + 0.4f else q }
 
-    fun boostFor(z: Float): Float = when {
-        z >= 12f -> min(baseRaster * 2.2f, 12f)
-        z >= 6f -> min(baseRaster * 1.7f, 10f)
-        z >= 3f -> min(baseRaster * 1.35f, 8f)
-        else -> baseRaster
-    }
-
-    LaunchedEffect(pageIndex, baseRaster) {
-        if (appliedRaster < 0.1f) appliedRaster = baseRaster
-    }
+    // HQ patch dpi vs screen — like MuPDF “patch matches screen”; a bit oversample for CAD lines
+    val hqOversample = when {
+        !highQuality -> 1f
+        performance == PerformanceMode.LOW -> 1.25f
+        performance == PerformanceMode.BALANCED -> 1.75f
+        else -> 2.25f
+    }.let { o -> if (largeScreen && highQuality) o + 0.25f else o }
 
     LaunchedEffect(scale) {
         onZoomedChanged(scale > 1.02f)
@@ -303,61 +308,97 @@ private fun PdfPage(
 
     LaunchedEffect(highQuality) {
         if (highQuality) onZoomedChanged(scale > 1.02f)
-        else onZoomedChanged(false)
+        else {
+            onZoomedChanged(false)
+            hqVisible = false
+            hqBmp = null
+        }
     }
 
     LaunchedEffect(fitNonce) {
         scale = 1f
         offset = Offset.Zero
-        appliedRaster = baseRaster
+        hqVisible = false
+        hqBmp = null
         onZoomedChanged(false)
     }
 
-    DisposableEffect(pageIndex) {
-        onDispose { deferRecycle(bitmap) }
-    }
-
-    // Settle before boost — this is what removes 1.0.17 mid-pinch stutter
-    LaunchedEffect(pageIndex, highQuality, baseRaster) {
-        if (!highQuality) {
-            appliedRaster = baseRaster
-            return@LaunchedEffect
-        }
-        snapshotFlow { scale }
-            .map { boostFor(it) }
-            .distinctUntilChanged { a, b -> abs(a - b) < 0.05f }
-            .collectLatest { target ->
-                if (target > baseRaster + 0.05f) delay(SETTLE_MS)
-                appliedRaster = target
-            }
-    }
-
-    LaunchedEffect(pageIndex, appliedRaster, performance, largeScreen, highQuality) {
-        if (appliedRaster < 0.1f) return@LaunchedEffect
-        val previous = bitmap
-        val held = arrayOfNulls<Bitmap>(1)
+    // Base full page @ viewport (MuPDF mEntire)
+    LaunchedEffect(pageIndex, viewW, viewH, baseQuality, performance, highQuality) {
+        if (viewW < 8f || viewH < 8f) return@LaunchedEffect
         try {
             val rendered = withContext(Dispatchers.Default) {
-                val bmp = renderPdfPage(
+                renderFullPage(
                     session = session,
                     pageIndex = pageIndex,
-                    raster = appliedRaster,
+                    viewW = viewW,
+                    viewH = viewH,
+                    quality = baseQuality,
                     performance = performance,
                     largeScreen = largeScreen && highQuality,
                 )
-                held[0] = bmp
-                ensureActive()
-                bmp
             }
             if (rendered != null) {
-                bitmap = rendered
-                held[0] = null
-                if (previous != null && previous !== rendered) deferRecycle(previous)
+                pagePts = rendered.pageW to rendered.pageH
+                baseBmp = rendered.bitmap
             }
         } catch (ce: CancellationException) {
-            deferRecycle(held[0])
             throw ce
         }
+    }
+
+    // HQ visible patch after settle (MuPDF mPatch) — hide during gesture
+    LaunchedEffect(pageIndex, highQuality) {
+        if (!highQuality) return@LaunchedEffect
+        snapshotFlow {
+            HqKey(
+                scale = (scale * 100).roundToInt(),
+                ox = (offset.x / 8f).roundToInt(),
+                oy = (offset.y / 8f).roundToInt(),
+                vw = viewW.roundToInt(),
+                vh = viewH.roundToInt(),
+                gesturing = gesturing,
+            )
+        }
+            .distinctUntilChanged()
+            .collectLatest { key ->
+                if (key.gesturing || key.scale <= 105 || key.vw < 8 || key.vh < 8) {
+                    hqVisible = false
+                    return@collectLatest
+                }
+                delay(SETTLE_MS)
+                val gen = ++hqGen
+                val s = scale
+                val off = offset
+                val pw = pagePts.first
+                val ph = pagePts.second
+                if (pw <= 0 || ph <= 0) return@collectLatest
+                try {
+                    val patch = withContext(Dispatchers.Default) {
+                        renderViewportPatch(
+                            session = session,
+                            pageIndex = pageIndex,
+                            pageW = pw,
+                            pageH = ph,
+                            viewW = viewW,
+                            viewH = viewH,
+                            scale = s,
+                            offset = off,
+                            oversample = hqOversample,
+                            performance = performance,
+                            largeScreen = largeScreen,
+                        )
+                    }
+                    ensureActive()
+                    if (gen != hqGen || session.closed) return@collectLatest
+                    if (patch != null && !patch.isRecycled) {
+                        hqBmp = patch
+                        hqVisible = true
+                    }
+                } catch (ce: CancellationException) {
+                    throw ce
+                }
+            }
     }
 
     val density = LocalDensity.current
@@ -386,11 +427,27 @@ private fun PdfPage(
                             }
                         }
                         if (pastSlop) {
+                            if (!gesturing) {
+                                gesturing = true
+                                hqVisible = false // MuPDF: drop HQ immediately on interact
+                            }
                             event.changes.fastForEach {
                                 if (it.positionChanged()) it.consume()
                             }
+                            // Finger-up: centroid is Unspecified → NaN graphicsLayer kills hwui (Grok)
+                            if (pressed.isEmpty()) continue
                             val centroid = event.calculateCentroid(useCurrent = true)
+                            if (centroid == Offset.Unspecified ||
+                                !centroid.x.isFinite() ||
+                                !centroid.y.isFinite() ||
+                                !zoomChange.isFinite() ||
+                                !panChange.x.isFinite() ||
+                                !panChange.y.isFinite()
+                            ) {
+                                continue
+                            }
                             val next = (scale * zoomChange).coerceIn(PDF_MIN_ZOOM, PDF_MAX_ZOOM)
+                            if (!next.isFinite()) continue
                             val z = if (scale > 1e-4f) next / scale else 1f
                             val pivot = Offset(
                                 centroid.x - size.width * 0.5f,
@@ -403,10 +460,12 @@ private fun PdfPage(
                                 newOffset.x.coerceIn(-maxPanX, maxPanX),
                                 newOffset.y.coerceIn(-maxPanY, maxPanY),
                             )
+                            if (!newOffset.x.isFinite() || !newOffset.y.isFinite()) continue
                             scale = next
                             offset = newOffset
                         }
                     } while (event.changes.fastAny { it.pressed })
+                    gesturing = false
                 }
             },
         contentAlignment = Alignment.Center,
@@ -418,13 +477,14 @@ private fun PdfPage(
             viewH = hPx
         }
 
-        val bmp = bitmap
-        if (bmp == null || bmp.isRecycled) {
+        val base = baseBmp
+        if (base == null || base.isRecycled) {
             CircularProgressIndicator()
         } else {
-            val image = remember(bmp) { bmp.asImageBitmap() }
+            val baseImage = remember(base) { base.asImageBitmap() }
+            // Base: Fit + GPU pan/zoom (blurry when deep — intentional)
             Image(
-                bitmap = image,
+                bitmap = baseImage,
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 filterQuality = FilterQuality.High,
@@ -437,9 +497,30 @@ private fun PdfPage(
                         translationY = offset.y
                     },
             )
+            // HQ patch: already in view pixels — NO graphicsLayer (covers viewport)
+            val hq = hqBmp
+            if (hqVisible && hq != null && !hq.isRecycled && scale > 1.05f) {
+                val hqImage = remember(hq) { hq.asImageBitmap() }
+                Image(
+                    bitmap = hqImage,
+                    contentDescription = null,
+                    contentScale = ContentScale.FillBounds,
+                    filterQuality = FilterQuality.High,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 }
+
+private data class HqKey(
+    val scale: Int,
+    val ox: Int,
+    val oy: Int,
+    val vw: Int,
+    val vh: Int,
+    val gesturing: Boolean,
+)
 
 private class PdfRenderSession(
     val renderer: PdfRenderer,
@@ -459,43 +540,58 @@ private class PdfRenderSession(
     }
 }
 
-private fun deferRecycle(bmp: Bitmap?) {
-    if (bmp == null || bmp.isRecycled) return
-    val choreographer = Choreographer.getInstance()
-    choreographer.postFrameCallback {
-        choreographer.postFrameCallback {
-            if (!bmp.isRecycled) {
-                runCatching { bmp.recycle() }
-            }
-        }
-    }
-}
+private data class FullPageResult(
+    val bitmap: Bitmap,
+    val pageW: Int,
+    val pageH: Int,
+)
 
 private const val PDF_MIN_ZOOM = 0.35f
 private const val PDF_MAX_ZOOM = 40f
-private const val PDF_MAX_BITMAP_EDGE = 8192
-private const val SETTLE_MS = 160L
+private const val PDF_MAX_EDGE = 4096
+private const val PDF_MAX_PIXELS = 12_000_000
+private const val SETTLE_MS = 120L
 
-/** Same raster path as 1.0.17-beta: page.width × raster (not viewport-fit). */
-private fun renderPdfPage(
+private fun limitWh(w0: Int, h0: Int): Pair<Int, Int> {
+    var w = w0.coerceAtLeast(1)
+    var h = h0.coerceAtLeast(1)
+    val edge = max(w, h)
+    if (edge > PDF_MAX_EDGE) {
+        val k = PDF_MAX_EDGE.toFloat() / edge
+        w = (w * k).toInt().coerceAtLeast(1)
+        h = (h * k).toInt().coerceAtLeast(1)
+    }
+    val pixels = w.toLong() * h
+    if (pixels > PDF_MAX_PIXELS) {
+        val k = sqrt(PDF_MAX_PIXELS.toDouble() / pixels)
+        w = (w * k).toInt().coerceAtLeast(1)
+        h = (h * k).toInt().coerceAtLeast(1)
+    }
+    return w to h
+}
+
+/** Full page fitted into the view at [quality]× (MuPDF entire bitmap). */
+private fun renderFullPage(
     session: PdfRenderSession,
     pageIndex: Int,
-    raster: Float,
+    viewW: Float,
+    viewH: Float,
+    quality: Float,
     performance: PerformanceMode,
     largeScreen: Boolean,
-): Bitmap? {
+): FullPageResult? {
     synchronized(session.renderer) {
         if (session.closed) return null
-        try {
+        return try {
             session.renderer.openPage(pageIndex).use { page ->
-                var w = (page.width * raster).toInt().coerceAtLeast(1)
-                var h = (page.height * raster).toInt().coerceAtLeast(1)
-                val maxEdge = max(w, h)
-                if (maxEdge > PDF_MAX_BITMAP_EDGE) {
-                    val k = PDF_MAX_BITMAP_EDGE.toFloat() / maxEdge
-                    w = (w * k).toInt().coerceAtLeast(1)
-                    h = (h * k).toInt().coerceAtLeast(1)
-                }
+                val pw = page.width
+                val ph = page.height
+                val fit = min(viewW / pw, viewH / ph)
+                var w = ceil(pw * fit * quality).toInt().coerceAtLeast(1)
+                var h = ceil(ph * fit * quality).toInt().coerceAtLeast(1)
+                val lim = limitWh(w, h)
+                w = lim.first
+                h = lim.second
                 val config = if (performance == PerformanceMode.LOW && !largeScreen) {
                     Bitmap.Config.RGB_565
                 } else {
@@ -506,12 +602,96 @@ private fun renderPdfPage(
                     bmp.eraseColor(android.graphics.Color.WHITE)
                 }
                 page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                return bmp
+                FullPageResult(bmp, pw, ph)
             }
         } catch (_: OutOfMemoryError) {
-            return null
+            System.gc()
+            null
         } catch (_: Exception) {
-            return null
+            null
+        }
+    }
+}
+
+/**
+ * Visible viewport → page region → bitmap sized to view×oversample.
+ * Matrix maps page points → patch pixels (Android PdfRenderer tile API).
+ */
+private fun renderViewportPatch(
+    session: PdfRenderSession,
+    pageIndex: Int,
+    pageW: Int,
+    pageH: Int,
+    viewW: Float,
+    viewH: Float,
+    scale: Float,
+    offset: Offset,
+    oversample: Float,
+    performance: PerformanceMode,
+    largeScreen: Boolean,
+): Bitmap? {
+    if (viewW < 8f || viewH < 8f || pageW <= 0 || pageH <= 0) return null
+    val fit = min(viewW / pageW, viewH / pageH)
+    val drawnW = pageW * fit
+    val drawnH = pageH * fit
+    val left = (viewW - drawnW) / 2f
+    val top = (viewH - drawnH) / 2f
+    val cx = viewW * 0.5f
+    val cy = viewH * 0.5f
+
+    fun viewToPage(vx: Float, vy: Float): Offset {
+        val lx = (vx - cx - offset.x) / scale + cx
+        val ly = (vy - cy - offset.y) / scale + cy
+        return Offset((lx - left) / fit, (ly - top) / fit)
+    }
+
+    // Exact viewport corners — pad would skew FillBounds alignment
+    val tl = viewToPage(0f, 0f)
+    val br = viewToPage(viewW, viewH)
+    val pageLeft = min(tl.x, br.x).coerceIn(0f, pageW.toFloat())
+    val pageTop = min(tl.y, br.y).coerceIn(0f, pageH.toFloat())
+    val pageRight = max(tl.x, br.x).coerceIn(0f, pageW.toFloat())
+    val pageBottom = max(tl.y, br.y).coerceIn(0f, pageH.toFloat())
+    val regionW = (pageRight - pageLeft).coerceAtLeast(0.5f)
+    val regionH = (pageBottom - pageTop).coerceAtLeast(0.5f)
+
+    var bw = ceil(viewW * oversample).toInt().coerceAtLeast(1)
+    var bh = ceil(viewH * oversample).toInt().coerceAtLeast(1)
+    val lim = limitWh(bw, bh)
+    bw = lim.first
+    bh = lim.second
+
+    val matrix = Matrix().apply {
+        // page → patch pixels
+        setScale(bw / regionW, bh / regionH)
+        postTranslate(-pageLeft * (bw / regionW), -pageTop * (bh / regionH))
+    }
+    if (!matrix.isAffine) return null
+
+    synchronized(session.renderer) {
+        if (session.closed) return null
+        return try {
+            session.renderer.openPage(pageIndex).use { page ->
+                val config = if (performance == PerformanceMode.LOW && !largeScreen) {
+                    Bitmap.Config.RGB_565
+                } else {
+                    Bitmap.Config.ARGB_8888
+                }
+                val bmp = Bitmap.createBitmap(bw, bh, config)
+                // White underpaint — only the rendered region is filled by PdfRenderer;
+                // with a correct matrix the whole bitmap is covered by page content for
+                // on-page views. Off-page pad stays white (page background).
+                if (config == Bitmap.Config.ARGB_8888) {
+                    bmp.eraseColor(android.graphics.Color.WHITE)
+                }
+                page.render(bmp, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                bmp
+            }
+        } catch (_: OutOfMemoryError) {
+            System.gc()
+            null
+        } catch (_: Exception) {
+            null
         }
     }
 }

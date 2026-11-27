@@ -97,6 +97,17 @@
     <string name="measure_reset">重置</string>
     <string name="author_name">Nguyen The Manh</string>
     <string name="measure_result">%1$s · 文件比例 1:%2$s</string>
+    <string name="measure_result_paper">%1$s · 图面 mm（比例组不同）</string>
+    <string name="measure_hvd">横 %1$s · 纵 %2$s · 斜 %3$s · 1:%4$s</string>
+    <string name="measure_hvd_paper">横 %1$s · 纵 %2$s · 斜 %3$s · 图面 mm</string>
+    <string name="measure_snap_kind">捕捉: %1$s</string>
+    <string name="snap_kind_end">端点</string>
+    <string name="snap_kind_mid">中点</string>
+    <string name="snap_kind_center">圆心</string>
+    <string name="snap_kind_nearest">线上</string>
+    <string name="layers_group_toggle">组 G%1$d</string>
+    <string name="layers_all_on">全部显示</string>
+    <string name="layers_all_off">全部隐藏</string>
     <string name="tool_measure">测距</string>
     <string name="measure_pick_a">测距：点按图纸端点/线段附近 (A)</string>
     <string name="save_dirty_pdf">保存 PDF</string>
