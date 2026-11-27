@@ -44,6 +44,13 @@ class RecentFilesStore(private val context: Context) {
         }
     }
 
+    suspend fun remove(uri: String) {
+        context.recentDataStore.edit { prefs ->
+            val list = decode(prefs[key].orEmpty()).filterNot { it.uri == uri }
+            prefs[key] = encode(list)
+        }
+    }
+
     private fun encode(items: List<RecentFile>): String {
         val arr = JSONArray()
         for (i in items) {

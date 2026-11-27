@@ -64,9 +64,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.jwwviewer.app.R
 import com.jwwviewer.app.data.AppLanguage
@@ -93,10 +95,12 @@ fun JwwViewerScreen(
     loading: Boolean,
     error: String?,
     settings: AppSettings,
+    memos: List<DrawingMemo>,
+    onMemosChange: (List<DrawingMemo>) -> Unit,
     onBack: () -> Unit,
 ) {
-    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val paper = if (isDark) JwwColors.paperDark else JwwColors.paperLight
+    // Light-only: CAD paper is always white so lines stay visible
+    val paper = JwwColors.paperLight
     val renderer = remember { CadRenderer() }
     var scale by remember(drawing, settings.fitPaddingDp) { mutableFloatStateOf(1f) }
     var offset by remember(drawing, settings.fitPaddingDp) { mutableStateOf(Offset.Zero) }
@@ -106,9 +110,8 @@ fun JwwViewerScreen(
     var showMemoPanel by remember { mutableStateOf(false) }
     var placeMemoMode by remember { mutableStateOf(false) }
     var measureMode by remember { mutableStateOf(false) }
-    var measureA by remember(drawing) { mutableStateOf<Offset?>(null) }
-    var measureB by remember(drawing) { mutableStateOf<Offset?>(null) }
-    var memos by remember(drawing) { mutableStateOf<List<DrawingMemo>>(emptyList()) }
+    var measureA by remember(drawing) { mutableStateOf<CadSnap.Result?>(null) }
+    var measureB by remember(drawing) { mutableStateOf<CadSnap.Result?>(null) }
     var editingMemo by remember { mutableStateOf<DrawingMemo?>(null) }
     var selectedHit by remember { mutableStateOf<CadTextHit?>(null) }
     val layerVisible = remember(drawing) {
@@ -234,12 +237,34 @@ fun JwwViewerScreen(
         if (measureMode) {
             val a = measureA
             val b = measureB
-            val scaleS = drawing?.activeScale ?: 1.0
-            val distWorld = if (a != null && b != null) {
-                hypot((b.x - a.x).toDouble(), (b.y - a.y).toDouble())
+            // JWW file coords = paper mm (図寸); 実寸 = 図寸 × group scale (1:S)
+            // Mixed groups: do not invent a scale — report paper mm only
+            val sameGroupScale: Double? = when {
+                a != null && b != null && drawing != null && a.gLayer == b.gLayer ->
+                    drawing.scaleForGroup(a.gLayer)
+                a != null && b == null && drawing != null ->
+                    drawing.scaleForGroup(a.gLayer)
+                else -> null
+            }
+            // JW_cad Viewer: show 横 / 縦 / 斜め (H / V / diagonal)
+            val paperDx = if (a != null && b != null) {
+                kotlin.math.abs((b.world.x - a.world.x).toDouble())
             } else {
                 null
             }
+            val paperDy = if (a != null && b != null) {
+                kotlin.math.abs((b.world.y - a.world.y).toDouble())
+            } else {
+                null
+            }
+            val paperDiag = if (paperDx != null && paperDy != null) {
+                hypot(paperDx, paperDy)
+            } else {
+                null
+            }
+            val s = sameGroupScale
+            val lastSnap = b ?: a
+            val snapLabel = lastSnap?.let { snapKindLabel(it.kind) }
             Surface(
                 color = MaterialTheme.colorScheme.secondaryContainer,
                 modifier = Modifier.fillMaxWidth(),
@@ -251,19 +276,37 @@ fun JwwViewerScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(
-                        text = when {
-                            distWorld != null -> stringResource(
-                                R.string.measure_result,
-                                formatMeasure(distWorld),
-                                formatScaleLabel(scaleS),
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = when {
+                                paperDx != null && paperDy != null && paperDiag != null && s != null ->
+                                    stringResource(
+                                        R.string.measure_hvd,
+                                        formatMeasure(paperDx * s),
+                                        formatMeasure(paperDy * s),
+                                        formatMeasure(paperDiag * s),
+                                        formatScaleLabel(s),
+                                    )
+                                paperDx != null && paperDy != null && paperDiag != null ->
+                                    stringResource(
+                                        R.string.measure_hvd_paper,
+                                        formatMeasure(paperDx),
+                                        formatMeasure(paperDy),
+                                        formatMeasure(paperDiag),
+                                    )
+                                a != null -> stringResource(R.string.measure_pick_b)
+                                else -> stringResource(R.string.measure_pick_a)
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        if (snapLabel != null) {
+                            Text(
+                                text = stringResource(R.string.measure_snap_kind, snapLabel),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = Color(0xFFC62828),
                             )
-                            a != null -> stringResource(R.string.measure_pick_b)
-                            else -> stringResource(R.string.measure_pick_a)
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
-                    )
+                        }
+                    }
                     TextButton(
                         onClick = {
                             measureA = null
@@ -300,16 +343,47 @@ fun JwwViewerScreen(
                         .align(Alignment.Center)
                         .padding(24.dp),
                 )
+                drawing != null && drawing.bounds == null -> Text(
+                    text = stringResource(R.string.error_open),
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(24.dp),
+                )
                 drawing != null -> {
-                    val bounds = drawing.bounds
+                    val bounds = drawing.bounds!!
                     val snapPx = with(density) { 40.dp.toPx() }
+                    // Keep size across file switches — onSizeChanged may not re-fire
+                    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+                    LaunchedEffect(drawing, canvasSize, rotationDeg, settings.fitPaddingDp) {
+                        if (canvasSize.width < 8 || canvasSize.height < 8) return@LaunchedEffect
+                        val pad = with(density) { settings.fitPaddingDp.dp.toPx() }
+                        scale = CadRenderer.fitScale(
+                            bounds,
+                            canvasSize.width.toFloat(),
+                            canvasSize.height.toFloat(),
+                            pad,
+                            rotationDeg,
+                        )
+                        offset = Offset.Zero
+                        fitted = true
+                    }
                     Canvas(
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(Unit) {
-                                detectTransformGestures { _, pan, zoom, _ ->
-                                    scale = (scale * zoom).coerceIn(0.02f, 80f)
-                                    offset += pan
+                            .onSizeChanged { canvasSize = it }
+                            .pointerInput(measureMode, placeMemoMode) {
+                                // Lock pan/zoom while measuring — drag skews perceived size
+                                if (measureMode || placeMemoMode) return@pointerInput
+                                detectTransformGestures { centroid, pan, zoom, _ ->
+                                    val newScale = (scale * zoom).coerceIn(0.001f, 500f)
+                                    val z = newScale / scale
+                                    val pivot = Offset(
+                                        centroid.x - size.width * 0.5f,
+                                        centroid.y - size.height * 0.5f,
+                                    )
+                                    offset = offset * z + pivot * (1f - z) + pan
+                                    scale = newScale
                                 }
                             }
                             .pointerInput(
@@ -342,13 +416,12 @@ fun JwwViewerScreen(
                                             vt = vt,
                                             maxScreenDistPx = snapPx,
                                         ) ?: return@detectTapGestures
-                                        val world = snapped.world
                                         when {
                                             measureA == null || measureB != null -> {
-                                                measureA = world
+                                                measureA = snapped
                                                 measureB = null
                                             }
-                                            else -> measureB = world
+                                            else -> measureB = snapped
                                         }
                                         return@detectTapGestures
                                     }
@@ -378,7 +451,7 @@ fun JwwViewerScreen(
                                             y = world.y,
                                             text = "",
                                         )
-                                        memos = memos + created
+                                        onMemosChange(memos + created)
                                         editingMemo = created
                                         placeMemoMode = false
                                         return@detectTapGestures
@@ -402,69 +475,82 @@ fun JwwViewerScreen(
                                 }
                             },
                     ) {
-                        if (bounds != null) {
-                            if (!fitted) {
-                                val pad = with(density) { settings.fitPaddingDp.dp.toPx() }
-                                scale = CadRenderer.fitScale(
-                                    bounds, size.width, size.height, pad, rotationDeg,
-                                )
-                                offset = Offset.Zero
-                                fitted = true
-                            }
-                            layerTick
-                            renderer.prepare(drawing, layerVisible)
-                            renderer.draw(
-                                scope = this,
-                                bounds = bounds,
-                                viewW = size.width,
-                                viewH = size.height,
-                                scale = scale,
-                                offsetX = offset.x,
-                                offsetY = offset.y,
-                                strokePx = with(density) { (1.25f * settings.strokeScale).dp.toPx() },
-                                fontScale = settings.fontScale,
-                                performance = settings.performance,
-                                rotationDeg = rotationDeg,
-                                memos = memos,
+                        layerTick
+                        renderer.prepare(drawing, layerVisible)
+                        renderer.draw(
+                            scope = this,
+                            bounds = bounds,
+                            viewW = size.width,
+                            viewH = size.height,
+                            scale = scale,
+                            offsetX = offset.x,
+                            offsetY = offset.y,
+                            strokePx = with(density) { (1.25f * settings.strokeScale).dp.toPx() },
+                            fontScale = settings.fontScale,
+                            performance = settings.performance,
+                            rotationDeg = rotationDeg,
+                            memos = memos,
+                        )
+                        val a = measureA
+                        val bPt = measureB
+                        if (measureMode && a != null) {
+                            val vt = ViewTransform(
+                                bounds,
+                                size.width.toFloat(),
+                                size.height.toFloat(),
+                                scale,
+                                offset.x,
+                                offset.y,
+                                rotationDeg,
                             )
-                            val a = measureA
-                            val b = measureB
-                            if (measureMode && a != null) {
-                                val vt = ViewTransform(
-                                    bounds,
-                                    size.width.toFloat(),
-                                    size.height.toFloat(),
-                                    scale,
-                                    offset.x,
-                                    offset.y,
-                                    rotationDeg,
+                            val sa = vt.worldToScreen(a.world.x, a.world.y)
+                            // JW_cad Viewer: blue handles; red when snapped
+                            fun handleColor(kind: CadSnap.Kind): Color =
+                                if (kind == CadSnap.Kind.Nearest) Color(0xFF1565C0)
+                                else Color(0xFFC62828)
+                            val ca = handleColor(a.kind)
+                            drawCircle(ca, radius = 10f, center = sa)
+                            drawCircle(
+                                Color.White,
+                                radius = 10f,
+                                center = sa,
+                                style = Stroke(width = 2.5f),
+                            )
+                            if (bPt != null) {
+                                val sb = vt.worldToScreen(bPt.world.x, bPt.world.y)
+                                // H/V along drawing axes (図寸 X/Y), NOT screen axes —
+                                // screen L-shape looked “kéo chéo” and mismatched sizes
+                                val cornerWorld = Offset(bPt.world.x, a.world.y)
+                                val sc = vt.worldToScreen(cornerWorld.x, cornerWorld.y)
+                                drawLine(
+                                    color = Color(0xFF1565C0).copy(alpha = 0.55f),
+                                    start = sa,
+                                    end = sc,
+                                    strokeWidth = 2f,
+                                    cap = StrokeCap.Round,
                                 )
-                                val sa = vt.worldToScreen(a.x, a.y)
-                                val measureColor = Color(0xFFE65100)
-                                drawCircle(measureColor, radius = 8f, center = sa)
+                                drawLine(
+                                    color = Color(0xFF1565C0).copy(alpha = 0.55f),
+                                    start = sc,
+                                    end = sb,
+                                    strokeWidth = 2f,
+                                    cap = StrokeCap.Round,
+                                )
+                                drawLine(
+                                    color = Color(0xFFE65100),
+                                    start = sa,
+                                    end = sb,
+                                    strokeWidth = 3f,
+                                    cap = StrokeCap.Round,
+                                )
+                                val cb = handleColor(bPt.kind)
+                                drawCircle(cb, radius = 10f, center = sb)
                                 drawCircle(
                                     Color.White,
-                                    radius = 8f,
-                                    center = sa,
-                                    style = Stroke(width = 2f),
+                                    radius = 10f,
+                                    center = sb,
+                                    style = Stroke(width = 2.5f),
                                 )
-                                if (b != null) {
-                                    val sb = vt.worldToScreen(b.x, b.y)
-                                    drawLine(
-                                        color = measureColor,
-                                        start = sa,
-                                        end = sb,
-                                        strokeWidth = 3f,
-                                        cap = StrokeCap.Round,
-                                    )
-                                    drawCircle(measureColor, radius = 8f, center = sb)
-                                    drawCircle(
-                                        Color.White,
-                                        radius = 8f,
-                                        center = sb,
-                                        style = Stroke(width = 2f),
-                                    )
-                                }
                             }
                         }
                     }
@@ -487,20 +573,22 @@ fun JwwViewerScreen(
             memo = memo,
             onSave = { text ->
                 val trimmed = text.trim()
-                memos = if (trimmed.isEmpty()) {
-                    memos.filter { it.id != memo.id }
-                } else {
-                    memos.map { if (it.id == memo.id) it.copy(text = trimmed) else it }
-                }
+                onMemosChange(
+                    if (trimmed.isEmpty()) {
+                        memos.filter { it.id != memo.id }
+                    } else {
+                        memos.map { if (it.id == memo.id) it.copy(text = trimmed) else it }
+                    },
+                )
                 editingMemo = null
             },
             onDelete = {
-                memos = memos.filter { it.id != memo.id }
+                onMemosChange(memos.filter { it.id != memo.id })
                 editingMemo = null
             },
             onDismiss = {
                 if (memo.text.isBlank()) {
-                    memos = memos.filter { it.id != memo.id }
+                    onMemosChange(memos.filter { it.id != memo.id })
                 }
                 editingMemo = null
             },
@@ -522,7 +610,7 @@ fun JwwViewerScreen(
                 showMemoPanel = false
             },
             onOpenMemo = { editingMemo = it; showMemoPanel = false },
-            onDeleteMemo = { id -> memos = memos.filter { it.id != id } },
+            onDeleteMemo = { id -> onMemosChange(memos.filter { it.id != id }) },
             onDismiss = { showMemoPanel = false },
         )
     }
@@ -534,6 +622,7 @@ fun JwwViewerScreen(
                 .distinct()
                 .sorted()
         }
+        val groups = remember(used) { used.map { it / 16 }.distinct().sorted() }
         ModalBottomSheet(
             onDismissRequest = { showLayers = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -543,6 +632,39 @@ fun JwwViewerScreen(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
+            // JW_cad Viewer: layer group show/hide
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TextButton(
+                    onClick = {
+                        used.forEach { layerVisible[it] = true }
+                        layerTick++
+                    },
+                ) { Text(stringResource(R.string.layers_all_on)) }
+                TextButton(
+                    onClick = {
+                        used.forEach { layerVisible[it] = false }
+                        layerTick++
+                    },
+                ) { Text(stringResource(R.string.layers_all_off)) }
+                groups.forEach { g ->
+                    TextButton(
+                        onClick = {
+                            val idxs = used.filter { it / 16 == g }
+                            val allOn = idxs.all { layerVisible[it] }
+                            idxs.forEach { layerVisible[it] = !allOn }
+                            layerTick++
+                        },
+                    ) {
+                        Text(stringResource(R.string.layers_group_toggle, g))
+                    }
+                }
+            }
             LazyColumn {
                 items(used) { idx ->
                     val name = drawing.layerNames.getOrElse(idx) { "" }
@@ -870,10 +992,17 @@ private fun TranslateNoteSheet(
     }
 }
 
-private fun Color.luminance(): Float =
-    0.2126f * red + 0.7152f * green + 0.0722f * blue
+/** Format real-world length (実寸 mm) after paper×scale conversion. */
+@Composable
+private fun snapKindLabel(kind: CadSnap.Kind): String = stringResource(
+    when (kind) {
+        CadSnap.Kind.End -> R.string.snap_kind_end
+        CadSnap.Kind.Mid -> R.string.snap_kind_mid
+        CadSnap.Kind.Center -> R.string.snap_kind_center
+        CadSnap.Kind.Nearest -> R.string.snap_kind_nearest
+    },
+)
 
-/** Format CAD world distance — JWW coordinates are real mm on the drawing. */
 private fun formatMeasure(mm: Double): String {
     val a = abs(mm)
     val mmLabel = when {

@@ -120,11 +120,24 @@ data class JwwBounds(
                     is JwwBlockRef -> add(e.x, e.y)
                 }
             }
-            if (!minX.isFinite() || widthOf(minX, maxX) <= 0.0) return null
-            return JwwBounds(minX, minY, maxX, maxY)
+            if (!minX.isFinite() || !maxX.isFinite()) return null
+            // Degenerate (point / vertical / horizontal only): pad so fit/zoom still works
+            var x0 = minX
+            var x1 = maxX
+            var y0 = minY
+            var y1 = maxY
+            if (x1 < x0 || y1 < y0) return null
+            val pad = 1.0
+            if (x1 - x0 < 1e-9) {
+                x0 -= pad
+                x1 += pad
+            }
+            if (y1 - y0 < 1e-9) {
+                y0 -= pad
+                y1 += pad
+            }
+            return JwwBounds(x0, y0, x1, y1)
         }
-
-        private fun widthOf(a: Double, b: Double) = b - a
     }
 }
 
@@ -139,11 +152,21 @@ data class JwwDrawing(
     val layerNames: Array<String>,
     val elements: List<JwwElement>,
     val bounds: JwwBounds?,
+    /** Block definitions by JW_CAD serial number (CDataList.m_nNumber). */
+    val blockDefs: Map<Int, List<JwwElement>> = emptyMap(),
+    /** True if parse stopped early (unknown entity / truncated stream). */
+    val truncated: Boolean = false,
 ) {
-    /** JW_CAD scale S for the write group (1:S). 0 / invalid → 1. */
+    /**
+     * JW_CAD scale denominator S for the write group (display 1:S).
+     * File coordinates are **paper mm (図寸)**; real mm (実寸) = paper × S.
+     */
     val activeScale: Double
-        get() {
-            val s = scales.getOrElse(writeGroup.coerceIn(0, 15)) { 1.0 }
-            return if (s.isFinite() && s > 0.0) s else 1.0
-        }
+        get() = scaleForGroup(writeGroup)
+
+    /** Scale denominator for layer group 0..15 (1:S). Invalid → 1. */
+    fun scaleForGroup(gLayer: Int): Double {
+        val s = scales.getOrElse(gLayer.coerceIn(0, 15)) { 1.0 }
+        return if (s.isFinite() && s > 0.0) s else 1.0
+    }
 }
