@@ -10,6 +10,7 @@
     <string name="layers">Lớp</string>
     <string name="loading">Đang tải…</string>
     <string name="error_open">Không mở được file này</string>
+    <string name="jww_partial_load">Đã tải một phần bản vẽ — một số đối tượng bị bỏ qua</string>
     <string name="settings">Cài đặt</string>
     <string name="settings_language">Ngôn ngữ</string>
     <string name="lang_system">Theo hệ thống</string>
@@ -97,6 +98,25 @@
     <string name="measure_reset">Đặt lại</string>
     <string name="author_name">Nguyễn Thế Mạnh</string>
     <string name="measure_result">%1$s · tỷ lệ file 1:%2$s</string>
+    <string name="measure_result_paper">%1$s · mm trên giấy (khác tỷ lệ nhóm)</string>
     <string name="tool_measure">Đo</string>
     <string name="measure_pick_a">Đo: chạm gần điểm/đoạn bản vẽ (A)</string>
+    <string name="save_dirty_pdf">Lưu PDF</string>
+    <string name="save_dirty_title">Lưu thay đổi?</string>
+    <string name="save_pdf_ok">Đã lưu PDF vào Documents/JwwViewer</string>
+    <string name="tool_save_pdf">PDF</string>
+    <string name="save_dirty_message">Bạn đã thêm ghi chú hoặc chỉnh sửa. Lưu PDF (kèm ghi chú) vào Documents/JwwViewer?</string>
+    <string name="save_pdf_fail">Không lưu được PDF: %1$s</string>
+    <string name="save_dirty_both">Lưu PDF + bản sao</string>
+    <string name="file_action_share_fail">Không chia sẻ được file này</string>
+    <string name="file_action_duplicate">Nhân bản</string>
+    <string name="file_action_open">Mở</string>
+    <string name="file_action_delete_confirm_title">Xóa file này?</string>
+    <string name="file_action_duplicate_fail">Không nhân bản được: %1$s</string>
+    <string name="file_action_delete_confirm_message">“%1$s” sẽ bị xóa khỏi Gần đây. Bản trong Documents/JwwViewer cũng được xóa nếu có thể.</string>
+    <string name="file_action_duplicate_ok">Đã nhân bản vào Documents/JwwViewer</string>
+    <string name="file_action_delete">Xóa</string>
+    <string name="file_action_share">Chia sẻ</string>
+    <string name="file_actions_title">Thao tác file</string>
+    <string name="cancel">Hủy</string>
 </resources>

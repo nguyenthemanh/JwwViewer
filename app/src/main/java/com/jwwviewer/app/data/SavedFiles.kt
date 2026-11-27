@@ -43,20 +43,72 @@ object SavedFiles {
         val mime = mimeFor(safe)
 
         if (Build.VERSION.SDK_INT >= 29) {
-            val mediaUri = saveViaMediaStore(context, source, safe, mime)
+            val mediaUri = saveViaMediaStore(context, safe, mime) { out ->
+                context.contentResolver.openInputStream(source)?.use { input ->
+                    input.copyTo(out)
+                } ?: error("Cannot read source file")
+            }
             if (mediaUri != null) return mediaUri
         }
 
+        return writeToLibraryFile(context, safe, mime) { out ->
+            context.contentResolver.openInputStream(source)?.use { input ->
+                input.copyTo(out)
+            } ?: error("Cannot read source file")
+        }
+    }
+
+    fun saveBytes(
+        context: Context,
+        bytes: ByteArray,
+        displayName: String,
+        mime: String = mimeFor(displayName),
+    ): Uri {
+        val safe = sanitizeName(displayName)
+        if (Build.VERSION.SDK_INT >= 29) {
+            val mediaUri = saveViaMediaStore(context, safe, mime) { it.write(bytes) }
+            if (mediaUri != null) return mediaUri
+        }
+        return writeToLibraryFile(context, safe, mime) { it.write(bytes) }
+    }
+
+    /** e.g. plan.jww → plan_copy.jww */
+    fun duplicateName(displayName: String): String {
+        val safe = sanitizeName(displayName)
+        val dot = safe.lastIndexOf('.')
+        return if (dot > 0) {
+            "${safe.substring(0, dot)}_copy${safe.substring(dot)}"
+        } else {
+            "${safe}_copy"
+        }
+    }
+
+    /** Best-effort delete of a library / MediaStore file; returns true if removed. */
+    fun tryDelete(context: Context, uri: Uri): Boolean {
+        return try {
+            when (uri.scheme) {
+                "content" -> context.contentResolver.delete(uri, null, null) > 0
+                "file" -> {
+                    val path = uri.path ?: return false
+                    File(path).takeIf { it.exists() }?.delete() == true
+                }
+                else -> false
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun writeToLibraryFile(
+        context: Context,
+        safe: String,
+        mime: String,
+        writer: (FileOutputStream) -> Unit,
+    ): Uri {
         val dir = libraryDir(context)
         var out = File(dir, safe)
-        if (out.exists()) {
-            out = File(dir, uniqueName(safe))
-        }
-        context.contentResolver.openInputStream(source)?.use { input ->
-            FileOutputStream(out).use { output -> input.copyTo(output) }
-        } ?: error("Cannot read source file")
-
-        // Media scanner so Files app sees it when on public storage
+        if (out.exists()) out = File(dir, uniqueName(safe))
+        FileOutputStream(out).use(writer)
         runCatching {
             android.media.MediaScannerConnection.scanFile(
                 context,
@@ -65,7 +117,6 @@ object SavedFiles {
                 null,
             )
         }
-
         return try {
             FileProvider.getUriForFile(
                 context,
@@ -79,9 +130,9 @@ object SavedFiles {
 
     private fun saveViaMediaStore(
         context: Context,
-        source: Uri,
         displayName: String,
         mime: String,
+        writer: (java.io.OutputStream) -> Unit,
     ): Uri? {
         return try {
             val values = ContentValues().apply {
@@ -95,13 +146,11 @@ object SavedFiles {
             val collection = MediaStore.Files.getContentUri("external")
             val dest = context.contentResolver.insert(collection, values) ?: return null
             context.contentResolver.openOutputStream(dest)?.use { output ->
-                context.contentResolver.openInputStream(source)?.use { input ->
-                    input.copyTo(output)
-                } ?: run {
-                    context.contentResolver.delete(dest, null, null)
-                    return null
-                }
-            } ?: return null
+                writer(output)
+            } ?: run {
+                context.contentResolver.delete(dest, null, null)
+                return null
+            }
             if (Build.VERSION.SDK_INT >= 29) {
                 values.clear()
                 values.put(MediaStore.MediaColumns.IS_PENDING, 0)

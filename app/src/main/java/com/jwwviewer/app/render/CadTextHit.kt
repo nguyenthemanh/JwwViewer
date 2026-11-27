@@ -44,6 +44,8 @@ object CadTextHitTester {
             if (idx < layerVisible.size && !layerVisible[idx]) continue
             val raw = normalizeCadText(e.text)
             if (raw.isBlank() || !containsJapanese(raw)) continue
+            // Same glyph string CadRenderer paints (width must match hit box)
+            val shown = e.text.replace("\r", " ").replace('\n', ' ').take(200)
             val display = raw.replace('\n', ' ').take(200)
 
             val o = vt.worldToScreen(e.x1.toFloat(), e.y1.toFloat())
@@ -52,7 +54,7 @@ object CadTextHitTester {
                 (e.sizeY * scale * fontScale).toFloat().coerceIn(8f * fontScale, 64f * fontScale),
             )
             paint.textSize = textSize
-            val w = paint.measureText(display).coerceAtLeast(textSize)
+            val w = paint.measureText(shown).coerceAtLeast(textSize)
             val h = textSize * 1.35f
             val pad = max(14f, textSize * 0.35f)
 

@@ -10,6 +10,7 @@
     <string name="layers">Layers</string>
     <string name="loading">Loading…</string>
     <string name="error_open">Could not open this file</string>
+    <string name="jww_partial_load">Drawing loaded partially — some entities were skipped</string>
     <string name="settings">Settings</string>
     <string name="settings_language">Language</string>
     <string name="lang_system">System default</string>
@@ -97,6 +98,25 @@
     <string name="measure_reset">Reset</string>
     <string name="author_name">Nguyen The Manh</string>
     <string name="measure_result">%1$s · file scale 1:%2$s</string>
+    <string name="measure_result_paper">%1$s · paper mm (mixed scales)</string>
     <string name="tool_measure">Measure</string>
     <string name="measure_pick_a">Measure: tap near a drawing point/edge (A)</string>
+    <string name="save_dirty_pdf">Save PDF</string>
+    <string name="save_dirty_title">Save changes?</string>
+    <string name="save_pdf_ok">PDF saved to Documents/JwwViewer</string>
+    <string name="tool_save_pdf">PDF</string>
+    <string name="save_dirty_message">You added notes or edits. Save a PDF (with notes) to Documents/JwwViewer?</string>
+    <string name="save_pdf_fail">Could not save PDF: %1$s</string>
+    <string name="save_dirty_both">Save PDF + copy</string>
+    <string name="file_action_share_fail">Could not share this file</string>
+    <string name="file_action_duplicate">Duplicate</string>
+    <string name="file_action_open">Open</string>
+    <string name="file_action_delete_confirm_title">Delete this file?</string>
+    <string name="file_action_duplicate_fail">Could not duplicate: %1$s</string>
+    <string name="file_action_delete_confirm_message">“%1$s” will be removed from Recent. Library copies in Documents/JwwViewer are deleted when possible.</string>
+    <string name="file_action_duplicate_ok">Duplicated to Documents/JwwViewer</string>
+    <string name="file_action_delete">Delete</string>
+    <string name="file_action_share">Share</string>
+    <string name="file_actions_title">File actions</string>
+    <string name="cancel">Cancel</string>
 </resources>

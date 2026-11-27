@@ -3,8 +3,10 @@ package com.jwwviewer.app.ui.home
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,24 +29,38 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Architecture
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.DesktopWindows
 import androidx.compose.material.icons.rounded.DevicesFold
 import androidx.compose.material.icons.rounded.FileOpen
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.TabletAndroid
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,9 +80,15 @@ fun HomeScreen(
     adaptive: AdaptiveLayout,
     onOpenFile: () -> Unit,
     onOpenRecent: (RecentFile) -> Unit,
+    onShareRecent: (RecentFile) -> Unit,
+    onDuplicateRecent: (RecentFile) -> Unit,
+    onDeleteRecent: (RecentFile) -> Unit,
     onSettings: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    var menuItem by remember { mutableStateOf<RecentFile?>(null) }
+    var pendingDelete by remember { mutableStateOf<RecentFile?>(null) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -101,6 +123,7 @@ fun HomeScreen(
                     useGrid = false,
                     onOpenFile = onOpenFile,
                     onOpenRecent = onOpenRecent,
+                    onFileActions = { menuItem = it },
                     onSettings = onSettings,
                     modifier = Modifier
                         .weight(adaptive.paneListWeight)
@@ -122,10 +145,135 @@ fun HomeScreen(
                 useGrid = adaptive.widthClass != WindowWidthSizeClass.Compact,
                 onOpenFile = onOpenFile,
                 onOpenRecent = onOpenRecent,
+                onFileActions = { menuItem = it },
                 onSettings = onSettings,
                 modifier = contentMod,
             )
         }
+    }
+
+    menuItem?.let { item ->
+        FileActionsSheet(
+            item = item,
+            onDismiss = { menuItem = null },
+            onOpen = {
+                menuItem = null
+                onOpenRecent(item)
+            },
+            onShare = {
+                menuItem = null
+                onShareRecent(item)
+            },
+            onDuplicate = {
+                menuItem = null
+                onDuplicateRecent(item)
+            },
+            onDelete = {
+                menuItem = null
+                pendingDelete = item
+            },
+        )
+    }
+
+    pendingDelete?.let { item ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text(stringResource(R.string.file_action_delete_confirm_title)) },
+            text = {
+                Text(stringResource(R.string.file_action_delete_confirm_message, item.name))
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDelete = null
+                        onDeleteRecent(item)
+                    },
+                ) {
+                    Text(stringResource(R.string.file_action_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FileActionsSheet(
+    item: RecentFile,
+    onDismiss: () -> Unit,
+    onOpen: () -> Unit,
+    onShare: () -> Unit,
+    onDuplicate: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Text(
+            text = stringResource(R.string.file_actions_title),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+        )
+        Text(
+            text = item.name,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp),
+        )
+        HorizontalDivider()
+        FileActionRow(
+            icon = Icons.Rounded.FileOpen,
+            label = stringResource(R.string.file_action_open),
+            onClick = onOpen,
+        )
+        FileActionRow(
+            icon = Icons.Rounded.Share,
+            label = stringResource(R.string.file_action_share),
+            onClick = onShare,
+        )
+        FileActionRow(
+            icon = Icons.Rounded.ContentCopy,
+            label = stringResource(R.string.file_action_duplicate),
+            onClick = onDuplicate,
+        )
+        FileActionRow(
+            icon = Icons.Rounded.Delete,
+            label = stringResource(R.string.file_action_delete),
+            onClick = onDelete,
+            destructive = true,
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun FileActionRow(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    destructive: Boolean = false,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val tint = if (destructive) scheme.error else scheme.onSurface
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+        Spacer(modifier = Modifier.size(16.dp))
+        Text(label, style = MaterialTheme.typography.titleMedium, color = tint)
     }
 }
 
@@ -136,6 +284,7 @@ private fun HomePane(
     useGrid: Boolean,
     onOpenFile: () -> Unit,
     onOpenRecent: (RecentFile) -> Unit,
+    onFileActions: (RecentFile) -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -240,7 +389,12 @@ private fun HomePane(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 items(recent, key = { it.uri }) { item ->
-                    RecentRow(item = item, onClick = { onOpenRecent(item) })
+                    RecentRow(
+                        item = item,
+                        onClick = { onOpenRecent(item) },
+                        onLongClick = { onFileActions(item) },
+                        onMore = { onFileActions(item) },
+                    )
                 }
             }
         } else {
@@ -250,7 +404,12 @@ private fun HomePane(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 items(recent, key = { it.uri }) { item ->
-                    RecentRow(item = item, onClick = { onOpenRecent(item) })
+                    RecentRow(
+                        item = item,
+                        onClick = { onOpenRecent(item) },
+                        onLongClick = { onFileActions(item) },
+                        onMore = { onFileActions(item) },
+                    )
                 }
             }
         }
@@ -282,12 +441,6 @@ private fun WideHintPane(
             softWrap = false,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = stringResource(R.string.fold_hint),
-            style = MaterialTheme.typography.bodyLarge,
-            color = scheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -309,16 +462,25 @@ private fun deviceHintIcon(adaptive: AdaptiveLayout): ImageVector {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RecentRow(item: RecentFile, onClick: () -> Unit) {
+private fun RecentRow(
+    item: RecentFile,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onMore: () -> Unit,
+) {
     val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(scheme.surface.copy(alpha = 0.92f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
+            .padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
@@ -339,6 +501,13 @@ private fun RecentRow(item: RecentFile, onClick: () -> Unit) {
                 text = item.kind.uppercase(),
                 style = MaterialTheme.typography.labelLarge,
                 color = scheme.onSurfaceVariant,
+            )
+        }
+        IconButton(onClick = onMore) {
+            Icon(
+                Icons.Rounded.MoreVert,
+                contentDescription = stringResource(R.string.file_actions_title),
+                tint = scheme.onSurfaceVariant,
             )
         }
     }

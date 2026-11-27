@@ -1,6 +1,7 @@
 package com.jwwviewer.app.render
 
 import androidx.compose.ui.geometry.Offset
+import com.jwwviewer.app.parser.JwwBlockRef
 import com.jwwviewer.app.parser.JwwCircle
 import com.jwwviewer.app.parser.JwwDrawing
 import com.jwwviewer.app.parser.JwwLine
@@ -19,6 +20,8 @@ object CadSnap {
     data class Result(
         val world: Offset,
         val kind: Kind,
+        /** Layer group 0..15 — use [JwwDrawing.scaleForGroup] for 実寸. */
+        val gLayer: Int,
     )
 
     enum class Kind { End, Mid, Center, Nearest }
@@ -41,14 +44,14 @@ object CadSnap {
         val maxD = maxScreenDistPx
         val maxD2 = maxD * maxD
 
-        fun considerPoint(wx: Double, wy: Double, kind: Kind) {
+        fun considerPoint(wx: Double, wy: Double, kind: Kind, gLayer: Int) {
             val s = vt.worldToScreen(wx.toFloat(), wy.toFloat())
             val dx = s.x - tap.x
             val dy = s.y - tap.y
             val d2 = dx * dx + dy * dy
             if (d2 > maxD2) return
             val d = hypot(dx.toDouble(), dy.toDouble()).toFloat()
-            val r = Result(Offset(wx.toFloat(), wy.toFloat()), kind)
+            val r = Result(Offset(wx.toFloat(), wy.toFloat()), kind, gLayer)
             when (kind) {
                 Kind.End -> if (d < bestEndD) {
                     bestEndD = d; bestEnd = r
@@ -65,10 +68,10 @@ object CadSnap {
             }
         }
 
-        fun considerSegment(x1: Double, y1: Double, x2: Double, y2: Double) {
-            considerPoint(x1, y1, Kind.End)
-            considerPoint(x2, y2, Kind.End)
-            considerPoint((x1 + x2) * 0.5, (y1 + y2) * 0.5, Kind.Mid)
+        fun considerSegment(x1: Double, y1: Double, x2: Double, y2: Double, gLayer: Int) {
+            considerPoint(x1, y1, Kind.End, gLayer)
+            considerPoint(x2, y2, Kind.End, gLayer)
+            considerPoint((x1 + x2) * 0.5, (y1 + y2) * 0.5, Kind.Mid, gLayer)
 
             val s1 = vt.worldToScreen(x1.toFloat(), y1.toFloat())
             val s2 = vt.worldToScreen(x2.toFloat(), y2.toFloat())
@@ -85,46 +88,55 @@ object CadSnap {
             ).toFloat()
             if (d < bestNearD) {
                 bestNearD = d
-                bestNear = Result(Offset(w.first.toFloat(), w.second.toFloat()), Kind.Nearest)
+                bestNear = Result(
+                    Offset(w.first.toFloat(), w.second.toFloat()),
+                    Kind.Nearest,
+                    gLayer,
+                )
             }
         }
 
         for (e in drawing.elements) {
             val idx = e.layerIndex.coerceIn(0, 255)
             if (idx < layerVisible.size && !layerVisible[idx]) continue
+            val g = e.attr.gLayer
             when (e) {
-                is JwwLine -> considerSegment(e.x1, e.y1, e.x2, e.y2)
-                is JwwPoint -> considerPoint(e.x, e.y, Kind.End)
+                is JwwLine -> considerSegment(e.x1, e.y1, e.x2, e.y2, g)
+                is JwwPoint -> considerPoint(e.x, e.y, Kind.End, g)
+                is JwwBlockRef -> considerPoint(e.x, e.y, Kind.End, g)
                 is JwwSolid -> {
-                    considerSegment(e.x1, e.y1, e.x2, e.y2)
-                    considerSegment(e.x2, e.y2, e.x3, e.y3)
-                    considerSegment(e.x3, e.y3, e.x4, e.y4)
-                    considerSegment(e.x4, e.y4, e.x1, e.y1)
+                    considerSegment(e.x1, e.y1, e.x2, e.y2, g)
+                    considerSegment(e.x2, e.y2, e.x3, e.y3, g)
+                    considerSegment(e.x3, e.y3, e.x4, e.y4, g)
+                    considerSegment(e.x4, e.y4, e.x1, e.y1, g)
                 }
                 is JwwCircle -> {
-                    considerPoint(e.cx, e.cy, Kind.Center)
+                    considerPoint(e.cx, e.cy, Kind.Center, g)
                     if (e.fullCircle) {
                         // quadrant points help for circles
-                        considerPoint(e.cx + e.radius, e.cy, Kind.End)
-                        considerPoint(e.cx - e.radius, e.cy, Kind.End)
-                        considerPoint(e.cx, e.cy + e.radius, Kind.End)
-                        considerPoint(e.cx, e.cy - e.radius, Kind.End)
+                        considerPoint(e.cx + e.radius, e.cy, Kind.End, g)
+                        considerPoint(e.cx - e.radius, e.cy, Kind.End, g)
+                        considerPoint(e.cx, e.cy + e.radius, Kind.End, g)
+                        considerPoint(e.cx, e.cy - e.radius, Kind.End, g)
                     } else {
-                        val a0 = Math.toRadians(e.startAngle)
-                        val a1 = Math.toRadians(e.startAngle + e.sweepAngle)
+                        // Angles in JWW are radians (same as CadRenderer)
+                        val a0 = e.startAngle
+                        val a1 = e.startAngle + e.sweepAngle
                         considerPoint(
                             e.cx + e.radius * cos(a0),
                             e.cy + e.radius * sin(a0),
                             Kind.End,
+                            g,
                         )
                         considerPoint(
                             e.cx + e.radius * cos(a1),
                             e.cy + e.radius * sin(a1),
                             Kind.End,
+                            g,
                         )
                     }
                 }
-                else -> Unit
+                else -> Unit // text etc.
             }
         }
 

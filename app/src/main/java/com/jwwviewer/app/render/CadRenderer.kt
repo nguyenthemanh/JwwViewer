@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import com.jwwviewer.app.data.DrawingMemo
 import com.jwwviewer.app.data.InkStroke
 import com.jwwviewer.app.data.PerformanceMode
+import com.jwwviewer.app.parser.JwwBlockRef
 import com.jwwviewer.app.parser.JwwBounds
 import com.jwwviewer.app.parser.JwwCircle
 import com.jwwviewer.app.parser.JwwDrawing
@@ -28,7 +29,8 @@ import kotlin.math.sin
  * Batched CAD draw (JwwMeasure-style): layer filter + native Path batch + Y-flip.
  */
 class CadRenderer {
-    private var cachedKey: Int = Int.MIN_VALUE
+    private var cachedDrawing: JwwDrawing? = null
+    private var cachedLayerHash: Int = 0
     private var androidLines: Map<Int, android.graphics.Path> = emptyMap()
     private var circles: List<JwwCircle> = emptyList()
     private var solids: List<JwwSolid> = emptyList()
@@ -36,9 +38,11 @@ class CadRenderer {
     private var points: List<JwwPoint> = emptyList()
 
     fun prepare(drawing: JwwDrawing, layerVisible: BooleanArray) {
-        val key = layerVisible.contentHashCode() xor drawing.elements.size
-        if (key == cachedKey) return
-        cachedKey = key
+        // Reference equality — XOR Int keys can collide across drawings
+        val layerHash = layerVisible.contentHashCode()
+        if (drawing === cachedDrawing && layerHash == cachedLayerHash) return
+        cachedDrawing = drawing
+        cachedLayerHash = layerHash
 
         val map = LinkedHashMap<Int, android.graphics.Path>()
         val circleList = ArrayList<JwwCircle>()
@@ -58,7 +62,8 @@ class CadRenderer {
                 is JwwSolid -> solidList.add(e)
                 is JwwText -> textList.add(e)
                 is JwwPoint -> pointList.add(e)
-                else -> Unit
+                // Unexpanded insert — show as a point so it is not invisible
+                is JwwBlockRef -> pointList.add(JwwPoint(e.attr, e.x, e.y))
             }
         }
         androidLines = map
@@ -166,9 +171,10 @@ class CadRenderer {
 
         if (performance.drawPoints) {
             for (p in points) {
+                // Keep 実点 as red dots (not pen-index cyan)
                 scope.drawCircle(
-                    JwwColors.pen(p.attr.color),
-                    radius = max(2f, strokePx),
+                    JwwColors.pointRed,
+                    radius = max(2.5f, strokePx * 1.15f),
                     center = tx(p.x.toFloat(), p.y.toFloat()),
                 )
             }

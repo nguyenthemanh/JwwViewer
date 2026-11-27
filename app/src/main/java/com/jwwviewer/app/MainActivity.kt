@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.widget.Toast
+import androidx.core.content.FileProvider
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -20,6 +22,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -30,6 +33,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Density
 import com.jwwviewer.app.data.AppSettingsStore
+import com.jwwviewer.app.data.DrawingMemo
+import com.jwwviewer.app.data.MemoStore
 import com.jwwviewer.app.data.RecentFile
 import com.jwwviewer.app.data.RecentFilesStore
 import com.jwwviewer.app.data.SavedFiles
@@ -42,7 +47,11 @@ import com.jwwviewer.app.ui.theme.JwwViewerTheme
 import com.jwwviewer.app.ui.viewer.JwwViewerScreen
 import com.jwwviewer.app.ui.viewer.PdfViewerScreen
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
@@ -85,7 +94,11 @@ class MainActivity : AppCompatActivity() {
                             val scope = rememberCoroutineScope()
                             val context = LocalContext.current
                             val errorOpen = stringResource(R.string.error_open)
+                            val partialLoad = stringResource(R.string.jww_partial_load)
                             val saveFailed = stringResource(R.string.save_on_exit_failed)
+                            val dupOk = stringResource(R.string.file_action_duplicate_ok)
+                            val dupFailFmt = stringResource(R.string.file_action_duplicate_fail)
+                            val shareFail = stringResource(R.string.file_action_share_fail)
                             val recent by recentStore.recent.collectAsState(initial = emptyList())
 
                             var screen by remember { mutableStateOf<Screen>(Screen.Home) }
@@ -94,22 +107,52 @@ class MainActivity : AppCompatActivity() {
                             var drawing by remember { mutableStateOf<JwwDrawing?>(null) }
                             var title by remember { mutableStateOf("") }
                             var currentUri by remember { mutableStateOf<Uri?>(null) }
+                            var memoKey by remember { mutableStateOf<String?>(null) }
+                            var memos by remember { mutableStateOf<List<DrawingMemo>>(emptyList()) }
+                            var memosBaseline by remember { mutableStateOf<List<DrawingMemo>>(emptyList()) }
                             var offerSaveOnExit by remember { mutableStateOf(false) }
                             var showSaveDialog by remember { mutableStateOf(false) }
                             var saving by remember { mutableStateOf(false) }
                             var saveError by remember { mutableStateOf<String?>(null) }
+                            var openJob by remember { mutableStateOf<Job?>(null) }
+                            val memoMutex = remember { Mutex() }
+                            var memoSaveGen by remember { mutableIntStateOf(0) }
 
                             fun goHome() {
+                                openJob?.cancel()
+                                openJob = null
                                 screen = Screen.Home
                                 drawing = null
                                 error = null
                                 currentUri = null
+                                memoKey = null
+                                memos = emptyList()
+                                memosBaseline = emptyList()
                                 offerSaveOnExit = false
                                 showSaveDialog = false
                                 saveError = null
+                                loading = false
+                            }
+
+                            fun persistMemos(list: List<DrawingMemo>) {
+                                val key = memoKey ?: return
+                                val gen = ++memoSaveGen
+                                val snapshot = list.toList()
+                                scope.launch(Dispatchers.IO) {
+                                    memoMutex.withLock {
+                                        if (gen != memoSaveGen) return@withLock
+                                        runCatching { MemoStore.save(context, key, snapshot) }
+                                    }
+                                }
+                            }
+
+                            fun updateMemos(list: List<DrawingMemo>) {
+                                memos = list
+                                persistMemos(list)
                             }
 
                             fun requestExitViewer() {
+                                // Memos already persist via MemoStore; only prompt for external-file copy.
                                 if (offerSaveOnExit && currentUri != null) {
                                     showSaveDialog = true
                                 } else {
@@ -122,12 +165,16 @@ class MainActivity : AppCompatActivity() {
                                 nameHint: String? = null,
                                 fromExternal: Boolean = false,
                             ) {
+                                openJob?.cancel()
                                 val name = nameHint ?: queryDisplayName(uri) ?: "Document"
                                 val kind = detectKind(name, uri)
                                 title = name
                                 currentUri = uri
                                 offerSaveOnExit = fromExternal
-                                scope.launch {
+                                memos = emptyList()
+                                memosBaseline = emptyList()
+                                memoKey = null
+                                openJob = scope.launch {
                                     if (!fromExternal) {
                                         recentStore.add(uri, name, kind)
                                     }
@@ -135,25 +182,45 @@ class MainActivity : AppCompatActivity() {
                                         drawing = null
                                         error = null
                                         screen = Screen.Pdf(uri)
+                                        loading = false
                                         return@launch
                                     }
                                     loading = true
                                     error = null
                                     drawing = null
                                     screen = Screen.Jww
-                                    val result = withContext(Dispatchers.Default) {
+                                    val key = MemoStore.keyFor(uri.toString(), name)
+                                    memoKey = key
+                                    val loaded = withContext(Dispatchers.IO) {
+                                        MemoStore.load(context, key)
+                                    }
+                                    memos = loaded
+                                    memosBaseline = loaded
+                                    val result = withContext(Dispatchers.IO) {
                                         runCatching {
-                                            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                                                ?: error("Cannot read file")
+                                            context.contentResolver.openInputStream(uri)?.use {
+                                                JwwParser.readCapped(it)
+                                            } ?: error("Cannot read file")
                                         }
                                     }
+                                    if (!isActive) return@launch
                                     result.fold(
                                         onSuccess = { bytes ->
-                                            val parsed = runCatching { JwwParser.parse(bytes) }
+                                            val parsed = withContext(Dispatchers.Default) {
+                                                runCatching { JwwParser.parse(bytes) }
+                                            }
+                                            if (!isActive) return@launch
                                             parsed.fold(
                                                 onSuccess = {
                                                     drawing = it
                                                     error = null
+                                                    if (it.truncated) {
+                                                        Toast.makeText(
+                                                            context,
+                                                            partialLoad,
+                                                            Toast.LENGTH_LONG,
+                                                        ).show()
+                                                    }
                                                 },
                                                 onFailure = {
                                                     error = it.message ?: errorOpen
@@ -215,6 +282,81 @@ class MainActivity : AppCompatActivity() {
                                     onOpenRecent = { item: RecentFile ->
                                         openUri(Uri.parse(item.uri), item.name, fromExternal = false)
                                     },
+                                    onShareRecent = { item ->
+                                        val uri = Uri.parse(item.uri)
+                                        val mime = when (item.kind) {
+                                            "pdf" -> "application/pdf"
+                                            else -> "application/octet-stream"
+                                        }
+                                        try {
+                                            val shareUri = shareableUri(context, uri)
+                                            val send = Intent(Intent.ACTION_SEND).apply {
+                                                type = mime
+                                                putExtra(Intent.EXTRA_STREAM, shareUri)
+                                                putExtra(Intent.EXTRA_SUBJECT, item.name)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            startActivity(
+                                                Intent.createChooser(
+                                                    send,
+                                                    getString(R.string.file_action_share),
+                                                ),
+                                            )
+                                        } catch (_: Exception) {
+                                            Toast.makeText(
+                                                context,
+                                                shareFail,
+                                                Toast.LENGTH_LONG,
+                                            ).show()
+                                        }
+                                    },
+                                    onDuplicateRecent = { item ->
+                                        scope.launch {
+                                            val src = Uri.parse(item.uri)
+                                            val result = withContext(Dispatchers.IO) {
+                                                runCatching {
+                                                    SavedFiles.saveCopy(
+                                                        context,
+                                                        src,
+                                                        SavedFiles.duplicateName(item.name),
+                                                    )
+                                                }
+                                            }
+                                            result.fold(
+                                                onSuccess = { saved ->
+                                                    recentStore.add(
+                                                        saved,
+                                                        SavedFiles.duplicateName(item.name),
+                                                        item.kind,
+                                                    )
+                                                    Toast.makeText(
+                                                        context,
+                                                        dupOk,
+                                                        Toast.LENGTH_SHORT,
+                                                    ).show()
+                                                },
+                                                onFailure = {
+                                                    Toast.makeText(
+                                                        context,
+                                                        dupFailFmt.format(
+                                                            it.message
+                                                                ?: it.javaClass.simpleName,
+                                                        ),
+                                                        Toast.LENGTH_LONG,
+                                                    ).show()
+                                                },
+                                            )
+                                        }
+                                    },
+                                    onDeleteRecent = { item ->
+                                        scope.launch {
+                                            val uri = Uri.parse(item.uri)
+                                            withContext(Dispatchers.IO) {
+                                                SavedFiles.tryDelete(context, uri)
+                                            }
+                                            recentStore.remove(item.uri)
+                                        }
+                                    },
                                     onSettings = { screen = Screen.Settings },
                                 )
                                 Screen.Settings -> SettingsScreen(
@@ -246,6 +388,8 @@ class MainActivity : AppCompatActivity() {
                                     loading = loading,
                                     error = error,
                                     settings = settings,
+                                    memos = memos,
+                                    onMemosChange = { updateMemos(it) },
                                     onBack = { requestExitViewer() },
                                 )
                                 is Screen.Pdf -> PdfViewerScreen(
@@ -330,14 +474,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun queryDisplayName(uri: Uri): String? {
-        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-            ?.use { c ->
-                if (c.moveToFirst()) {
-                    val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if (idx >= 0) return c.getString(idx)
+        return try {
+            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { c ->
+                    if (c.moveToFirst()) {
+                        val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (idx >= 0) return c.getString(idx)
+                    }
                 }
-            }
-        return uri.lastPathSegment
+            uri.lastPathSegment
+        } catch (_: Exception) {
+            uri.lastPathSegment
+        }
     }
 
     private fun detectKind(name: String, uri: Uri): String {
@@ -348,6 +496,23 @@ class MainActivity : AppCompatActivity() {
             lower.endsWith(".jwc") || path.endsWith(".jwc") -> "jww"
             else -> "jww"
         }
+    }
+
+    /** Ensure share targets get a content URI with read grant. */
+    private fun shareableUri(context: android.content.Context, uri: Uri): Uri {
+        if (uri.scheme == "content") return uri
+        if (uri.scheme == "file") {
+            val path = uri.path ?: return uri
+            val file = java.io.File(path)
+            if (file.exists()) {
+                return FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file,
+                )
+            }
+        }
+        return uri
     }
 
     private sealed interface Screen {

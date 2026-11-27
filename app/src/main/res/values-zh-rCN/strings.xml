@@ -99,4 +99,22 @@
     <string name="measure_result">%1$s · 文件比例 1:%2$s</string>
     <string name="tool_measure">测距</string>
     <string name="measure_pick_a">测距：点按图纸端点/线段附近 (A)</string>
+    <string name="save_dirty_pdf">保存 PDF</string>
+    <string name="save_dirty_title">保存更改？</string>
+    <string name="save_pdf_ok">已保存 PDF 到 Documents/JwwViewer</string>
+    <string name="tool_save_pdf">PDF</string>
+    <string name="save_dirty_message">您添加了便签或进行了编辑。将带便签的 PDF 保存到 Documents/JwwViewer？</string>
+    <string name="save_pdf_fail">无法保存 PDF：%1$s</string>
+    <string name="save_dirty_both">保存 PDF 和副本</string>
+    <string name="file_action_share_fail">无法分享此文件</string>
+    <string name="file_action_duplicate">创建副本</string>
+    <string name="file_action_open">打开</string>
+    <string name="file_action_delete_confirm_title">删除此文件？</string>
+    <string name="file_action_duplicate_fail">无法创建副本：%1$s</string>
+    <string name="file_action_delete_confirm_message">将从“最近”移除“%1$s”。Documents/JwwViewer 中的副本在可能时也会删除。</string>
+    <string name="file_action_duplicate_ok">已复制到 Documents/JwwViewer</string>
+    <string name="file_action_delete">删除</string>
+    <string name="file_action_share">分享</string>
+    <string name="file_actions_title">文件操作</string>
+    <string name="cancel">取消</string>
 </resources>

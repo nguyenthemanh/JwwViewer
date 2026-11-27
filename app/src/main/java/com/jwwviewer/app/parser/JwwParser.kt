@@ -1,6 +1,8 @@
 package com.jwwviewer.app.parser
 
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.util.zip.ZipInputStream
 
 /**
@@ -9,11 +11,16 @@ import java.util.zip.ZipInputStream
  */
 object JwwParser {
 
+    /** Soft cap for zip member / in-memory payload (zip-bomb / OOM guard). */
+    const val MAX_PAYLOAD_BYTES = 80 * 1024 * 1024
+
     fun parse(bytes: ByteArray): JwwDrawing {
         val data = unwrap(bytes)
         val r = MfcReader(data)
         val header = readHeader(r)
         val elements = ArrayList<JwwElement>(4096)
+        val blockDefs = LinkedHashMap<Int, List<JwwElement>>()
+        var truncated = false
         try {
             val count = r.readCount()
             repeat(count) {
@@ -26,12 +33,15 @@ object JwwParser {
                 repeat(blockCount.coerceAtMost(100_000)) {
                     val name = r.readObjectTag()
                     if (name != "CDataList") return@repeat
-                    skipDataList(r, header.version)
+                    val (num, members) = readDataList(r, header.version)
+                    blockDefs[num] = members
                 }
             }
         } catch (_: Exception) {
-            // keep partial drawing
+            // Unknown entity / desync: cannot skip payload size → stop, keep prior entities
+            truncated = true
         }
+        val flat = BlockExpand.flatten(elements, blockDefs)
         return JwwDrawing(
             version = header.version,
             memo = header.memo,
@@ -39,9 +49,25 @@ object JwwParser {
             writeGroup = header.writeGroup,
             layerStates = header.layerStates,
             layerNames = header.layerNames,
-            elements = elements,
-            bounds = JwwBounds.from(elements),
+            elements = flat,
+            bounds = JwwBounds.from(flat),
+            blockDefs = blockDefs,
+            truncated = truncated,
         )
+    }
+
+    fun readCapped(stream: InputStream, maxBytes: Int = MAX_PAYLOAD_BYTES): ByteArray {
+        val out = ByteArrayOutputStream(minOf(maxBytes, 256 * 1024))
+        val buf = ByteArray(8192)
+        var total = 0
+        while (true) {
+            val n = stream.read(buf)
+            if (n < 0) break
+            total += n
+            if (total > maxBytes) error("File too large (max ${maxBytes / (1024 * 1024)} MB)")
+            out.write(buf, 0, n)
+        }
+        return out.toByteArray()
     }
 
     private fun unwrap(data: ByteArray): ByteArray {
@@ -50,7 +76,7 @@ object JwwParser {
                 var entry = zip.nextEntry
                 while (entry != null) {
                     if (!entry.isDirectory) {
-                        return zip.readBytes()
+                        return readCapped(zip, MAX_PAYLOAD_BYTES)
                     }
                     entry = zip.nextEntry
                 }
@@ -265,18 +291,20 @@ object JwwParser {
         }
     }
 
-    private fun skipDataList(r: MfcReader, ver: Int) {
+    /** CDataList: definition serial number + member entities. */
+    private fun readDataList(r: MfcReader, ver: Int): Pair<Int, List<JwwElement>> {
         readAttr(r, ver)
-        r.readDword()
-        r.readDword()
+        val number = r.readDword()
+        r.readDword() // referred
         r.readDword() // CTime as DWORD (LibreCAD)
         r.readCString()
         val members = r.readCount()
-        val sink = ArrayList<JwwElement>()
+        val sink = ArrayList<JwwElement>(members.coerceAtMost(4096))
         repeat(members) {
             val name = r.readObjectTag()
             if (name.isEmpty()) return@repeat
-            readNamed(r, name, ver, sink, store = false)
+            readNamed(r, name, ver, sink, store = true)
         }
+        return number to sink
     }
 }
